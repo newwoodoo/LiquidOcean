@@ -3,141 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Liquid Ocean Premium</title>
+    <title>Liquid Ocean Physics</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         body {
-            background: linear-gradient(-45deg, #0f172a, #1e1b4b, #1e40af, #0f172a);
-            background-size: 400% 400%;
-            animation: gradient 10s ease infinite;
-            color: #ffffff;
-            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
             margin: 0;
+            padding: 0;
             overflow: hidden;
+            background: #020617;
+            font-family: sans-serif;
         }
 
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .container {
-            text-align: center;
-            padding: 40px 20px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 35px;
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            width: 85%;
-            max-width: 400px;
-        }
-
-        h1 {
-            font-size: 32px;
-            margin: 0 0 10px 0;
-            font-weight: 800;
-            letter-spacing: -1px;
-        }
-
-        #user-name {
-            font-size: 18px;
-            color: #60a5fa;
-            margin-bottom: 30px;
-            font-weight: 500;
-        }
-
-        .status-badge {
-            background: rgba(34, 197, 94, 0.2);
-            color: #4ade80;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 20px;
-            display: inline-block;
-        }
-
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        button {
-            border: none;
-            padding: 16px;
-            border-radius: 18px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
+        /* Кнопки покупки вверху */
+        .shop-header {
+            position: absolute;
+            top: 20px;
             width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            z-index: 10;
         }
 
-        .primary-btn {
-            background: #ffffff;
-            color: #000000;
+        .drop-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50% 50% 50% 10%;
+            transform: rotate(-45deg);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
         }
 
-        .secondary-btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+        .drop-btn:active { transform: rotate(-45deg) scale(0.9); }
+        .b-blue { background: #3b82f6; }
+        .b-green { background: #22c55e; }
+        .b-white { background: #ffffff; }
+        .b-purple { background: #a855f7; }
+
+        /* Эффект жидкости (Metaballs) */
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            filter: blur(8px) contrast(20); /* Это делает шарики "жидкими" */
+            background: #020617;
         }
 
-        button:active {
-            transform: scale(0.96);
+        canvas { display: block; }
+
+        /* Слой для никнеймов (без фильтра размытия) */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .nickname {
+            position: absolute;
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            transition: opacity 0.5s;
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="status-badge">System Online</div>
-        <h1>Liquid Ocean</h1>
-        <div id="user-name">Загрузка...</div>
-        
-        <div class="btn-group">
-            <button class="primary-btn" onclick="sendData()">Отправить сигнал боту</button>
-            <button class="secondary-btn" onclick="tg.close()">Закрыть панель</button>
-        </div>
+    <div class="shop-header">
+        <button class="drop-btn b-blue" onclick="spawnDrop('#3b82f6')"></button>
+        <button class="drop-btn b-green" onclick="spawnDrop('#22c55e')"></button>
+        <button class="drop-btn b-white" onclick="spawnDrop('#ffffff')"></button>
+        <button class="drop-btn b-purple" onclick="spawnDrop('#a855f7')"></button>
     </div>
 
+    <div id="ui-layer"></div>
+    <div id="canvas-container"></div>
+
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
+        const { Engine, Render, Runner, Bodies, Composite, Mouse, World } = Matter;
 
-        // Установка имени
-        const user = tg.initDataUnsafe?.user;
-        if (user) {
-            document.getElementById("user-name").innerText = `Привет, ${user.first_name}!`;
-        } else {
-            document.getElementById("user-name").innerText = "Привет, Капитан!";
-        }
-
-        // Настройка главной кнопки TG
-        tg.MainButton.setText("ПОДТВЕРДИТЬ");
-        tg.MainButton.show();
-        tg.MainButton.onClick(() => {
-            tg.HapticFeedback.notificationOccurred('success');
-            tg.close();
+        // Инициализация
+        const engine = Engine.create();
+        const world = engine.world;
+        const container = document.getElementById('canvas-container');
+        
+        const render = Render.create({
+            element: container,
+            engine: engine,
+            options: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                wireframes: false,
+                background: 'transparent'
+            }
         });
 
-        // Функция отправки данных боту
-        function sendData() {
-            tg.HapticFeedback.impactOccurred('heavy');
-            // Это отправит сообщение боту и закроет приложение
-            tg.sendData("Action: check_in");
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // Стенки (невидимые)
+        const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight + 50, window.innerWidth, 100, { isStatic: true });
+        const leftWall = Bodies.rectangle(-50, window.innerHeight/2, 100, window.innerHeight, { isStatic: true });
+        const rightWall = Bodies.rectangle(window.innerWidth + 50, window.innerHeight/2, 100, window.innerHeight, { isStatic: true });
+        World.add(world, [ground, leftWall, rightWall]);
+
+        // Функция создания капли
+        function spawnDrop(color) {
+            const x = window.innerWidth / 2 + (Math.random() * 40 - 20);
+            const radius = 12; // Размер капли
+            const drop = Bodies.circle(x, -20, radius, {
+                restitution: 0.3, // Прыгучесть как у воды
+                friction: 0.05,
+                render: { fillStyle: color }
+            });
+            
+            // Помечаем "свои" капли (для теста все свои)
+            drop.isMine = true; 
+            World.add(world, drop);
+            Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
+
+        // Работа с гироскопом
+        window.addEventListener('deviceorientation', (event) => {
+            const gravity = engine.gravity;
+            // Наклон влево-вправо (gamma) и вперед-назад (beta)
+            gravity.x = Math.min(Math.max(event.gamma / 30, -1), 1);
+            gravity.y = Math.min(Math.max(event.beta / 30, -1), 1);
+        });
+
+        // Встряска (всплытие своих капель)
+        let lastX, lastY, lastZ;
+        window.addEventListener('devicemotion', (event) => {
+            const acc = event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            let deltaX = Math.abs(acc.x - lastX);
+            if (deltaX > 15) { // Порог встряски
+                shakeEffect();
+            }
+            lastX = acc.x;
+        });
+
+        function shakeEffect() {
+            const allBodies = Composite.allBodies(world);
+            const userName = Telegram.WebApp.initDataUnsafe?.user?.first_name || "User";
+
+            allBodies.forEach(body => {
+                if (body.isMine && !body.isStatic) {
+                    // Поднимаем вверх (отрицательная гравитация)
+                    Matter.Body.applyForce(body, body.position, { x: 0, y: -0.02 });
+                    showNickname(body.position.x, body.position.y, userName);
+                }
+            });
+        }
+
+        function showNickname(x, y, name) {
+            const ui = document.getElementById('ui-layer');
+            const el = document.createElement('div');
+            el.className = 'nickname';
+            el.innerText = name;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            ui.appendChild(el);
+            
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 500);
+            }, 2000);
+        }
+
+        // Для iOS: запрос доступа к датчикам
+        document.body.onclick = () => {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission();
+            }
+        };
+
+        Telegram.WebApp.ready();
     </script>
 </body>
 </html>
