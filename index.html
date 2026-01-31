@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Liquid Ocean Physics</title>
+    <title>Liquid Ocean</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
@@ -13,47 +13,44 @@
             overflow: hidden;
             background: #020617;
             font-family: sans-serif;
+            touch-action: none;
         }
 
-        /* Кнопки покупки вверху */
+        /* Уменьшенные в 2 раза кнопки */
         .shop-header {
             position: absolute;
-            top: 20px;
+            top: 15px;
             width: 100%;
             display: flex;
             justify-content: center;
-            gap: 15px;
-            z-index: 10;
+            gap: 10px;
+            z-index: 20;
         }
 
         .drop-btn {
-            width: 50px;
-            height: 50px;
+            width: 25px;
+            height: 25px;
             border-radius: 50% 50% 50% 10%;
             transform: rotate(-45deg);
-            border: none;
+            border: 1px solid rgba(255,255,255,0.2);
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             transition: transform 0.1s;
         }
 
-        .drop-btn:active { transform: rotate(-45deg) scale(0.9); }
+        .drop-btn:active { transform: rotate(-45deg) scale(0.8); }
         .b-blue { background: #3b82f6; }
         .b-green { background: #22c55e; }
         .b-white { background: #ffffff; }
         .b-purple { background: #a855f7; }
 
-        /* Эффект жидкости (Metaballs) */
+        /* Контейнер с эффектом жидкости */
         #canvas-container {
             width: 100vw;
             height: 100vh;
-            filter: blur(8px) contrast(20); /* Это делает шарики "жидкими" */
+            filter: blur(3px) contrast(15);
             background: #020617;
         }
 
-        canvas { display: block; }
-
-        /* Слой для никнеймов (без фильтра размытия) */
         #ui-layer {
             position: absolute;
             top: 0;
@@ -61,16 +58,14 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 5;
+            z-index: 15;
         }
 
         .nickname {
             position: absolute;
-            color: rgba(255,255,255,0.8);
-            font-size: 12px;
-            font-weight: bold;
-            white-space: nowrap;
-            transition: opacity 0.5s;
+            color: rgba(255,255,255,0.5);
+            font-size: 9px;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -87,11 +82,9 @@
     <div id="canvas-container"></div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Mouse, World } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, World } = Matter;
 
-        // Инициализация
         const engine = Engine.create();
-        const world = engine.world;
         const container = document.getElementById('canvas-container');
         
         const render = Render.create({
@@ -109,83 +102,71 @@
         const runner = Runner.create();
         Runner.run(runner, engine);
 
-        // Стенки (невидимые)
-        const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight + 50, window.innerWidth, 100, { isStatic: true });
-        const leftWall = Bodies.rectangle(-50, window.innerHeight/2, 100, window.innerHeight, { isStatic: true });
-        const rightWall = Bodies.rectangle(window.innerWidth + 50, window.innerHeight/2, 100, window.innerHeight, { isStatic: true });
-        World.add(world, [ground, leftWall, rightWall]);
+        // Границы экрана
+        const wallOptions = { isStatic: true, render: { visible: false } };
+        World.add(engine.world, [
+            Bodies.rectangle(window.innerWidth/2, window.innerHeight + 25, window.innerWidth, 50, wallOptions),
+            Bodies.rectangle(-25, window.innerHeight/2, 50, window.innerHeight, wallOptions),
+            Bodies.rectangle(window.innerWidth + 25, window.innerHeight/2, 50, window.innerHeight, wallOptions)
+        ]);
 
-        // Функция создания капли
         function spawnDrop(color) {
-            const x = window.innerWidth / 2 + (Math.random() * 40 - 20);
-            const radius = 12; // Размер капли
-            const drop = Bodies.circle(x, -20, radius, {
-                restitution: 0.3, // Прыгучесть как у воды
-                friction: 0.05,
+            const x = window.innerWidth / 2 + (Math.random() * 20 - 10);
+            // Размер как точка (очень маленький)
+            const radius = 2.5; 
+            const drop = Bodies.circle(x, 10, radius, {
+                restitution: 0.1,
+                friction: 0.01,
+                density: 0.001,
                 render: { fillStyle: color }
             });
             
-            // Помечаем "свои" капли (для теста все свои)
-            drop.isMine = true; 
-            World.add(world, drop);
+            drop.isMine = true;
+            World.add(engine.world, drop);
             Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
 
-        // Работа с гироскопом
+        // Правильный гироскоп (без инверсии)
         window.addEventListener('deviceorientation', (event) => {
             const gravity = engine.gravity;
-            // Наклон влево-вправо (gamma) и вперед-назад (beta)
-            gravity.x = Math.min(Math.max(event.gamma / 30, -1), 1);
-            gravity.y = Math.min(Math.max(event.beta / 30, -1), 1);
+            // Корректное направление: gamma - лево/право, beta - перед/зад
+            gravity.x = event.gamma / 30; 
+            gravity.y = event.beta / 30;
         });
 
-        // Встряска (всплытие своих капель)
-        let lastX, lastY, lastZ;
+        // Встряска для всплытия
+        let lastX = 0;
         window.addEventListener('devicemotion', (event) => {
-            const acc = event.accelerationIncludingGravity;
+            const acc = event.acceleration;
             if (!acc) return;
-
-            let deltaX = Math.abs(acc.x - lastX);
-            if (deltaX > 15) { // Порог встряски
-                shakeEffect();
+            let diff = Math.abs(acc.x - lastX);
+            if (diff > 12) {
+                const userName = Telegram.WebApp.initDataUnsafe?.user?.first_name || "Guest";
+                Composite.allBodies(engine.world).forEach(body => {
+                    if (body.isMine && !body.isStatic) {
+                        Matter.Body.applyForce(body, body.position, { x: 0, y: -0.0005 });
+                        if (Math.random() > 0.9) showNickname(body.position.x, body.position.y, userName);
+                    }
+                });
             }
             lastX = acc.x;
         });
 
-        function shakeEffect() {
-            const allBodies = Composite.allBodies(world);
-            const userName = Telegram.WebApp.initDataUnsafe?.user?.first_name || "User";
-
-            allBodies.forEach(body => {
-                if (body.isMine && !body.isStatic) {
-                    // Поднимаем вверх (отрицательная гравитация)
-                    Matter.Body.applyForce(body, body.position, { x: 0, y: -0.02 });
-                    showNickname(body.position.x, body.position.y, userName);
-                }
-            });
-        }
-
         function showNickname(x, y, name) {
-            const ui = document.getElementById('ui-layer');
             const el = document.createElement('div');
             el.className = 'nickname';
             el.innerText = name;
             el.style.left = x + 'px';
             el.style.top = y + 'px';
-            ui.appendChild(el);
-            
-            setTimeout(() => {
-                el.style.opacity = '0';
-                setTimeout(() => el.remove(), 500);
-            }, 2000);
+            document.getElementById('ui-layer').appendChild(el);
+            setTimeout(() => el.remove(), 1500);
         }
 
-        // Для iOS: запрос доступа к датчикам
-        document.body.onclick = () => {
+        document.body.addEventListener('click', () => {
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission();
             }
-        };
+        });
 
         Telegram.WebApp.ready();
     </script>
