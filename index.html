@@ -2,14 +2,14 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         body { 
             margin: 0; padding: 0; 
-            background: #fdf6e3; /* Кремовый фон */
-            overflow: hidden; touch-action: none; 
+            background: #fdf6e3; 
+            overflow: hidden; touch-action: none;
         }
         
         .header { 
@@ -19,32 +19,31 @@
 
         .btn { 
             width: 34px; height: 34px; border-radius: 50%; 
-            border: 2px solid rgba(0,0,0,0.05); cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            border: 1px solid rgba(0,0,0,0.1); cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
-        .btn:active { transform: scale(0.9); }
 
         #flash { 
             position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
             width: 100px; height: 100px; border-radius: 50%; 
-            opacity: 0; pointer-events: none; z-index: 50;
-            filter: blur(20px);
+            opacity: 0; pointer-events: none; z-index: 50; filter: blur(15px);
         }
 
+        /* Отрегулированный фильтр для четкости размеров */
         #liquid-container { 
             width: 100vw; height: 100vh; 
-            filter: blur(2.5px) contrast(12);
+            filter: blur(1.5px) contrast(8);
             background: transparent;
         }
+        canvas { display: block; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #7dd3fc, #38bdf8);" onclick="buy('#38bdf8', 2.2)"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #bbf7d0, #86efac);" onclick="buy('#93c47d', 2.9)"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #fff7ed, #ffedd5);" onclick="buy('#f9f7f2', 3.5)"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #e9d5ff, #d8b4fe);" onclick="buy('#b4a7d6', 4.4)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #7dd3fc, #0ea5e9);" onclick="buy('#38bdf8', 2.5)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #bbf7d0, #22c55e);" onclick="buy('#93c47d', 3.3)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #ffffff, #cbd5e1);" onclick="buy('#f9f7f2', 4.0)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #e9d5ff, #a855f7);" onclick="buy('#b4a7d6', 5.0)"></div>
     </div>
     
     <div id="flash"></div>
@@ -53,43 +52,47 @@
     <script>
         const { Engine, Render, Runner, Bodies, Composite } = Matter;
         const engine = Engine.create();
-        engine.timing.timeScale = 0.45;
+        engine.timing.timeScale = 0.5;
 
         const render = Render.create({
             element: document.getElementById('liquid-container'),
             engine: engine,
             options: { 
-                width: window.innerWidth, height: window.innerHeight, 
-                wireframes: false, background: 'transparent' 
+                width: window.innerWidth, 
+                height: window.innerHeight, 
+                wireframes: false, 
+                background: 'transparent' 
             }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
+        // Стенки с отступом снизу (безопасная зона Telegram)
         const T = 1000;
         const W = window.innerWidth;
         const H = window.innerHeight;
+        const safeArea = 20; // Чтобы капли не тонули в самом низу
+
         const walls = [
-            Bodies.rectangle(W/2, H + T/2 - 2, W * 2, T, { isStatic: true, friction: 0.1 }),
-            Bodies.rectangle(-T/2 + 2, H/2, T, H * 2, { isStatic: true, friction: 0.1 }),
-            Bodies.rectangle(W + T/2 - 2, H/2, T, H * 2, { isStatic: true, friction: 0.1 })
+            Bodies.rectangle(W/2, H + T/2 - safeArea, W * 2, T, { isStatic: true, friction: 0.1 }),
+            Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true, friction: 0.1 }),
+            Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true, friction: 0.1 })
         ];
         Composite.add(engine.world, walls);
 
         function buy(color, radius) {
             const f = document.getElementById('flash');
-            // Теплая "солнечная" вспышка
-            f.style.background = `radial-gradient(circle, #ffedd5 0%, transparent 70%)`;
+            f.style.background = `radial-gradient(circle, #ffe4c4 0%, transparent 70%)`;
             f.style.transition = 'none';
-            f.style.opacity = '0.7';
+            f.style.opacity = '0.6';
             
             setTimeout(() => {
-                f.style.transition = 'opacity 1s ease-out';
+                f.style.transition = 'opacity 0.8s ease-out';
                 f.style.opacity = '0';
                 
-                const drop = Bodies.circle(W/2, H/2, radius, {
-                    restitution: 0.05,
-                    frictionAir: 0.08,
+                const drop = Bodies.circle(W/2, H/2 - 20, radius, {
+                    restitution: 0.1,
+                    frictionAir: 0.05,
                     render: { fillStyle: color }
                 });
                 
@@ -100,9 +103,14 @@
             }, 50);
         }
 
+        // Фикс гироскопа: учитываем ориентацию
         window.addEventListener('deviceorientation', (e) => {
-            engine.gravity.x = (e.gamma || 0) / 75;
-            engine.gravity.y = (e.beta || 0) / 75;
+            let x = e.gamma || 0;
+            let y = e.beta || 0;
+
+            // Ограничиваем углы, чтобы физика была предсказуемой
+            engine.gravity.x = Math.max(Math.min(x / 40, 1), -1);
+            engine.gravity.y = Math.max(Math.min(y / 40, 1), -1);
         });
 
         document.addEventListener('touchstart', () => {
