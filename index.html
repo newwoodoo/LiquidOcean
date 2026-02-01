@@ -9,19 +9,8 @@
         body { margin: 0; padding: 0; background: #020617; overflow: hidden; touch-action: none; }
         .header { position: absolute; top: 40px; width: 100%; display: flex; justify-content: space-around; z-index: 100; }
         .btn { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); cursor: pointer; }
-        
-        #flash { 
-            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-            width: 70px; height: 70px; border-radius: 50%; opacity: 0; pointer-events: none; z-index: 50;
-        }
-
-        /* Контейнер для эффекта жидкости */
-        #liquid-container {
-            width: 100vw;
-            height: 100vh;
-            filter: blur(2px) contrast(10); /* Слипание частиц в воду */
-            background: #020617;
-        }
+        #flash { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 70px; height: 70px; border-radius: 50%; opacity: 0; pointer-events: none; z-index: 50; }
+        #liquid-container { width: 100vw; height: 100vh; filter: blur(2px) contrast(10); background: #020617; }
         canvas { display: block; }
     </style>
 </head>
@@ -39,31 +28,32 @@
         const { Engine, Render, Runner, Bodies, Composite } = Matter;
         const engine = Engine.create();
         
-        // Замедляем мир в 3 раза для эффекта воды
+        // Повышаем точность расчетов, чтобы не было "дырок" в углах
+        engine.positionIterations = 10;
         engine.timing.timeScale = 0.35;
 
         const render = Render.create({
             element: document.getElementById('liquid-container'),
             engine: engine,
-            options: { 
-                width: window.innerWidth, 
-                height: window.innerHeight, 
-                wireframes: false, 
-                background: 'transparent' 
-            }
+            options: { width: window.innerWidth, height: window.innerHeight, wireframes: false, background: 'transparent' }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        // Создаем максимально надежные границы
-        const thickness = 500; 
+        // Создаем "бронированный" аквариум со стенками внахлест
+        const T = 1000; // Толщина стен
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+
         const walls = [
-            // Пол
-            Bodies.rectangle(window.innerWidth/2, window.innerHeight + thickness/2 - 2, window.innerWidth * 2, thickness, { isStatic: true }),
-            // Лево
-            Bodies.rectangle(-thickness/2 + 2, window.innerHeight/2, thickness, window.innerHeight * 2, { isStatic: true }),
-            // Право
-            Bodies.rectangle(window.innerWidth + thickness/2 - 2, window.innerHeight/2, thickness, window.innerHeight * 2, { isStatic: true })
+            // Пол (широкий, заходит за края)
+            Bodies.rectangle(W/2, H + T/2 - 5, W + T, T, { isStatic: true, label: 'wall' }),
+            // Левая стена (перекрывает угол с полом)
+            Bodies.rectangle(-T/2 + 5, H/2, T, H + T, { isStatic: true, label: 'wall' }),
+            // Правая стена (перекрывает угол с полом)
+            Bodies.rectangle(W + T/2 - 5, H/2, T, H + T, { isStatic: true, label: 'wall' }),
+            // Потолок (на всякий случай)
+            Bodies.rectangle(W/2, -T/2, W + T, T, { isStatic: true, label: 'wall' })
         ];
         Composite.add(engine.world, walls);
 
@@ -74,14 +64,13 @@
             f.style.opacity = '1';
             
             setTimeout(() => {
-                f.style.transition = 'opacity 0.8s ease-out';
+                f.style.transition = 'opacity(0.8s) ease-out';
                 f.style.opacity = '0';
                 
-                // Создаем частицу-пиксель
-                const drop = Bodies.circle(window.innerWidth/2, window.innerHeight/2 - 10, 3.5, {
+                const drop = Bodies.circle(W/2, H/2 - 10, 3.5, {
                     restitution: 0.05,
                     friction: 0.001,
-                    frictionAir: 0.1, // Большое сопротивление воздуха для медленного падения
+                    frictionAir: 0.1,
                     render: { fillStyle: color }
                 });
                 
@@ -92,9 +81,7 @@
             }, 50);
         }
 
-        // Мягкий гироскоп
         window.addEventListener('deviceorientation', (e) => {
-            // Очень плавное движение при наклоне
             engine.gravity.x = (e.gamma || 0) / 80;
             engine.gravity.y = (e.beta || 0) / 80;
         });
