@@ -13,97 +13,79 @@
             overflow: hidden;
             background: #020617;
             font-family: sans-serif;
-            touch-action: none;
         }
 
-        /* Кнопки разнесены для удобства */
         .shop-header {
             position: absolute;
-            top: 30px;
+            top: 40px;
             width: 100%;
             display: flex;
-            justify-content: space-around; /* Максимальное расстояние между кнопками */
-            padding: 0 10px;
-            box-sizing: border-box;
-            z-index: 20;
+            justify-content: space-evenly;
+            z-index: 100;
         }
 
         .drop-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 50% 50% 50% 10%;
-            transform: rotate(-45deg);
-            border: 1.5px solid rgba(255,255,255,0.3);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
             cursor: pointer;
-            transition: transform 0.1s;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
         }
 
-        .drop-btn:active { transform: rotate(-45deg) scale(0.8); }
-        .b-blue { background: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
-        .b-green { background: #22c55e; box-shadow: 0 0 10px #22c55e; }
-        .b-white { background: #ffffff; box-shadow: 0 0 10px #ffffff; }
-        .b-purple { background: #a855f7; box-shadow: 0 0 10px #a855f7; }
+        .b-blue { background: #3b82f6; }
+        .b-green { background: #22c55e; }
+        .b-white { background: #ffffff; }
+        .b-purple { background: #a855f7; }
 
-        /* Вспышка в центре */
         #flash {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+            pointer-events: none;
+            z-index: 50;
             opacity: 0;
-            pointer-events: none;
-            z-index: 10;
         }
 
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            filter: blur(3px) contrast(15);
-            background: #020617;
-        }
-
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 15;
+        canvas {
+            display: block;
+            /* Пока отключил фильтр, чтобы увидеть точки */
+            /* filter: blur(4px) contrast(15); */
         }
     </style>
 </head>
 <body>
 
     <div class="shop-header">
-        <button class="drop-btn b-blue" onclick="purchase('#3b82f6')"></button>
-        <button class="drop-btn b-green" onclick="purchase('#22c55e')"></button>
-        <button class="drop-btn b-white" onclick="purchase('#ffffff')"></button>
-        <button class="drop-btn b-purple" onclick="purchase('#a855f7')"></button>
+        <div class="drop-btn b-blue" onclick="purchase('#3b82f6')"></div>
+        <div class="drop-btn b-green" onclick="purchase('#22c55e')"></div>
+        <div class="drop-btn b-white" onclick="purchase('#ffffff')"></div>
+        <div class="drop-btn b-purple" onclick="purchase('#a855f7')"></div>
     </div>
 
     <div id="flash"></div>
-    <div id="ui-layer"></div>
-    <div id="canvas-container"></div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, World } = Matter;
+        // Проверка загрузки Matter.js
+        if (typeof Matter === 'undefined') {
+            alert('Библиотека физики не загружена. Проверь интернет.');
+        }
+
+        const { Engine, Render, Runner, Bodies, Composite } = Matter;
 
         const engine = Engine.create();
-        const container = document.getElementById('canvas-container');
-        
         const render = Render.create({
-            element: container,
+            element: document.body,
             engine: engine,
             options: {
                 width: window.innerWidth,
                 height: window.innerHeight,
                 wireframes: false,
-                background: 'transparent'
+                background: '#020617'
             }
         });
 
@@ -111,72 +93,55 @@
         const runner = Runner.create();
         Runner.run(runner, engine);
 
-        // Границы экрана
-        const wallOptions = { isStatic: true, render: { visible: false } };
-        World.add(engine.world, [
-            Bodies.rectangle(window.innerWidth/2, window.innerHeight + 25, window.innerWidth, 50, wallOptions),
-            Bodies.rectangle(-25, window.innerHeight/2, 50, window.innerHeight, wallOptions),
-            Bodies.rectangle(window.innerWidth + 25, window.innerHeight/2, 50, window.innerHeight, wallOptions)
-        ]);
+        // Стенки
+        const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight + 25, window.innerWidth, 50, { isStatic: true });
+        const leftWall = Bodies.rectangle(-25, window.innerHeight/2, 50, window.innerHeight, { isStatic: true });
+        const rightWall = Bodies.rectangle(window.innerWidth + 25, window.innerHeight/2, 50, window.innerHeight, { isStatic: true });
+        Composite.add(engine.world, [ground, leftWall, rightWall]);
 
         function purchase(color) {
+            // Вспышка
             const flash = document.getElementById('flash');
-            
-            // Настройка градиентной вспышки под цвет капли
-            flash.style.background = `radial-gradient(circle, ${color} 0%, rgba(0,0,0,0) 75%)`;
-            
-            // Анимация вспышки
+            flash.style.background = `radial-gradient(circle, ${color} 0%, rgba(0,0,0,0) 80%)`;
             flash.style.opacity = '1';
-            Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            flash.style.transition = 'none';
+
+            // Вибрация
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
 
             setTimeout(() => {
+                flash.style.transition = 'opacity 0.5s ease-out';
                 flash.style.opacity = '0';
-                flash.style.transition = 'opacity 0.6s ease-out';
-                
-                // Создание капли в центре после вспышки
-                const x = window.innerWidth / 2;
-                const y = window.innerHeight / 2;
-                const radius = 2.8; 
-                
-                const drop = Bodies.circle(x, y, radius, {
-                    restitution: 0.2,
-                    friction: 0.01,
-                    render: { fillStyle: color }
-                });
-                
-                drop.isMine = true;
-                World.add(engine.world, drop);
-            }, 100);
 
-            // Сброс transition для следующего раза
-            flash.style.transition = 'none';
+                // Создаем каплю
+                const drop = Bodies.circle(
+                    window.innerWidth / 2,
+                    window.innerHeight / 2,
+                    4, // Размер чуть больше для теста
+                    {
+                        restitution: 0.5,
+                        friction: 0.02,
+                        render: { fillStyle: color }
+                    }
+                );
+                Composite.add(engine.world, drop);
+            }, 50);
         }
 
-        window.addEventListener('deviceorientation', (event) => {
-            engine.gravity.x = event.gamma / 25; 
-            engine.gravity.y = event.beta / 25;
+        // Гироскоп
+        window.addEventListener('deviceorientation', (e) => {
+            engine.gravity.x = e.gamma / 20;
+            engine.gravity.y = e.beta / 20;
         });
 
-        // Встряска для всплытия
-        let lastX = 0;
-        window.addEventListener('devicemotion', (event) => {
-            const acc = event.acceleration;
-            if (!acc) return;
-            if (Math.abs(acc.x - lastX) > 15) {
-                Composite.allBodies(engine.world).forEach(body => {
-                    if (body.isMine && !body.isStatic) {
-                        Matter.Body.applyForce(body, body.position, { x: 0, y: -0.0008 });
-                    }
-                });
-            }
-            lastX = acc.x;
-        });
-
-        document.body.addEventListener('click', () => {
+        // Запрос разрешений для iPhone
+        document.body.addEventListener('touchstart', () => {
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission();
             }
-        });
+        }, { once: true });
 
         Telegram.WebApp.ready();
     </script>
