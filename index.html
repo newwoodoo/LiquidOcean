@@ -8,7 +8,7 @@
     <style>
         body { 
             margin: 0; padding: 0; 
-            background: radial-gradient(circle at center, #0f172a 0%, #020617 100%); 
+            background: #fdf6e3; /* Кремовый фон */
             overflow: hidden; touch-action: none; 
         }
         
@@ -18,34 +18,33 @@
         }
 
         .btn { 
-            width: 32px; height: 32px; border-radius: 50%; 
-            border: 1px solid rgba(255,255,255,0.2); cursor: pointer;
-            box-shadow: 0 0 15px rgba(255,255,255,0.1);
+            width: 34px; height: 34px; border-radius: 50%; 
+            border: 2px solid rgba(0,0,0,0.05); cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             transition: transform 0.2s;
         }
-        .btn:active { transform: scale(0.85); }
+        .btn:active { transform: scale(0.9); }
 
         #flash { 
             position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-            width: 120px; height: 120px; border-radius: 50%; 
+            width: 100px; height: 100px; border-radius: 50%; 
             opacity: 0; pointer-events: none; z-index: 50;
-            filter: blur(15px);
+            filter: blur(20px);
         }
 
         #liquid-container { 
             width: 100vw; height: 100vh; 
-            filter: blur(3px) contrast(12); /* Эффект мягкого слияния */
+            filter: blur(2.5px) contrast(12);
             background: transparent;
         }
-        canvas { display: block; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #60a5fa, #1d4ed8);" onclick="buy('#3b82f6')"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #4ade80, #15803d);" onclick="buy('#22c55e')"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #ffffff, #94a3b8);" onclick="buy('#ffffff')"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #c084fc, #7e22ce);" onclick="buy('#a855f7')"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #7dd3fc, #38bdf8);" onclick="buy('#38bdf8', 2.2)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #bbf7d0, #86efac);" onclick="buy('#93c47d', 2.9)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #fff7ed, #ffedd5);" onclick="buy('#f9f7f2', 3.5)"></div>
+        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #e9d5ff, #d8b4fe);" onclick="buy('#b4a7d6', 4.4)"></div>
     </div>
     
     <div id="flash"></div>
@@ -54,67 +53,56 @@
     <script>
         const { Engine, Render, Runner, Bodies, Composite } = Matter;
         const engine = Engine.create();
-        
-        engine.positionIterations = 15; // Максимальная точность углов
-        engine.timing.timeScale = 0.4;  // Плавность воды
+        engine.timing.timeScale = 0.45;
 
         const render = Render.create({
             element: document.getElementById('liquid-container'),
             engine: engine,
             options: { 
-                width: window.innerWidth, 
-                height: window.innerHeight, 
-                wireframes: false, 
-                background: 'transparent' 
+                width: window.innerWidth, height: window.innerHeight, 
+                wireframes: false, background: 'transparent' 
             }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        // "Бронированные" стены внахлест
         const T = 1000;
         const W = window.innerWidth;
         const H = window.innerHeight;
         const walls = [
-            Bodies.rectangle(W/2, H + T/2 - 2, W * 2, T, { isStatic: true, friction: 0.01 }),
-            Bodies.rectangle(-T/2 + 2, H/2, T, H * 2, { isStatic: true, friction: 0.01 }),
-            Bodies.rectangle(W + T/2 - 2, H/2, T, H * 2, { isStatic: true, friction: 0.01 })
+            Bodies.rectangle(W/2, H + T/2 - 2, W * 2, T, { isStatic: true, friction: 0.1 }),
+            Bodies.rectangle(-T/2 + 2, H/2, T, H * 2, { isStatic: true, friction: 0.1 }),
+            Bodies.rectangle(W + T/2 - 2, H/2, T, H * 2, { isStatic: true, friction: 0.1 })
         ];
         Composite.add(engine.world, walls);
 
-        function buy(color) {
+        function buy(color, radius) {
             const f = document.getElementById('flash');
-            f.style.background = `radial-gradient(circle, ${color} 0%, transparent 80%)`;
+            // Теплая "солнечная" вспышка
+            f.style.background = `radial-gradient(circle, #ffedd5 0%, transparent 70%)`;
             f.style.transition = 'none';
-            f.style.opacity = '0.8';
+            f.style.opacity = '0.7';
             
             setTimeout(() => {
-                f.style.transition = 'opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1)';
+                f.style.transition = 'opacity 1s ease-out';
                 f.style.opacity = '0';
                 
-                const drop = Bodies.circle(W/2, H/2 - 10, 3.8, {
-                    restitution: 0.02,
-                    frictionAir: 0.12,
-                    render: { 
-                        fillStyle: color,
-                        // Добавляем свечение через canvas (через тень частицы)
-                        sprite: { xScale: 1, yScale: 1 }
-                    }
+                const drop = Bodies.circle(W/2, H/2, radius, {
+                    restitution: 0.05,
+                    frictionAir: 0.08,
+                    render: { fillStyle: color }
                 });
                 
                 Composite.add(engine.world, drop);
                 if (window.Telegram?.WebApp?.HapticFeedback) {
-                    Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+                    Telegram.WebApp.HapticFeedback.impactOccurred('light');
                 }
             }, 50);
         }
 
-        // Интеллектуальный гироскоп
         window.addEventListener('deviceorientation', (e) => {
-            let gx = (e.gamma || 0) / 70;
-            let gy = (e.beta || 0) / 70;
-            engine.gravity.x = gx;
-            engine.gravity.y = gy;
+            engine.gravity.x = (e.gamma || 0) / 75;
+            engine.gravity.y = (e.beta || 0) / 75;
         });
 
         document.addEventListener('touchstart', () => {
