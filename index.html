@@ -8,31 +8,33 @@
     <style>
         body { 
             margin: 0; padding: 0; 
-            background: #fdf6e3; 
+            background: #F5F1E9; /* Глубокий кремовый */
             overflow: hidden; touch-action: none;
         }
         
+        /* Плоские кнопки с тонкими границами */
         .header { 
-            position: absolute; top: 40px; width: 100%; 
+            position: absolute; top: 50px; width: 100%; 
             display: flex; justify-content: space-around; z-index: 100; 
         }
 
         .btn { 
-            width: 34px; height: 34px; border-radius: 50%; 
+            width: 36px; height: 36px; border-radius: 50%; 
             border: 1px solid rgba(0,0,0,0.1); cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: transform 0.1s ease;
         }
+        .btn:active { transform: scale(0.9); }
 
+        /* Эффект появления - просто расширяющийся круг без свечения */
         #flash { 
             position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-            width: 100px; height: 100px; border-radius: 50%; 
-            opacity: 0; pointer-events: none; z-index: 50; filter: blur(15px);
+            width: 1px; height: 1px; border-radius: 50%; 
+            border: 1px solid rgba(0,0,0,0);
+            opacity: 0; pointer-events: none; z-index: 50;
         }
 
-        /* Отрегулированный фильтр для четкости размеров */
         #liquid-container { 
             width: 100vw; height: 100vh; 
-            filter: blur(1.5px) contrast(8);
             background: transparent;
         }
         canvas { display: block; }
@@ -40,11 +42,7 @@
 </head>
 <body>
     <div class="header">
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #7dd3fc, #0ea5e9);" onclick="buy('#38bdf8', 2.5)"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #bbf7d0, #22c55e);" onclick="buy('#93c47d', 3.3)"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #ffffff, #cbd5e1);" onclick="buy('#f9f7f2', 4.0)"></div>
-        <div class="btn" style="background: radial-gradient(circle at 30% 30%, #e9d5ff, #a855f7);" onclick="buy('#b4a7d6', 5.0)"></div>
-    </div>
+        <div class="btn" style="background: #79addc;" onclick="buy('#79addc', 2.2)"></div> <div class="btn" style="background: #a3c586;" onclick="buy('#a3c586', 2.9)"></div> <div class="btn" style="background: #ffffff;" onclick="buy('#ffffff', 3.5)"></div> <div class="btn" style="background: #9b89b3;" onclick="buy('#9b89b3', 4.4)"></div> </div>
     
     <div id="flash"></div>
     <div id="liquid-container"></div>
@@ -52,6 +50,9 @@
     <script>
         const { Engine, Render, Runner, Bodies, Composite } = Matter;
         const engine = Engine.create();
+        
+        // Физика стала еще более точной
+        engine.positionIterations = 15;
         engine.timing.timeScale = 0.5;
 
         const render = Render.create({
@@ -61,17 +62,17 @@
                 width: window.innerWidth, 
                 height: window.innerHeight, 
                 wireframes: false, 
-                background: 'transparent' 
+                background: 'transparent',
+                pixelRatio: window.devicePixelRatio // Для идеальной четкости на Retina-экранах
             }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        // Стенки с отступом снизу (безопасная зона Telegram)
         const T = 1000;
         const W = window.innerWidth;
         const H = window.innerHeight;
-        const safeArea = 20; // Чтобы капли не тонули в самом низу
+        const safeArea = 15;
 
         const walls = [
             Bodies.rectangle(W/2, H + T/2 - safeArea, W * 2, T, { isStatic: true, friction: 0.1 }),
@@ -82,17 +83,23 @@
 
         function buy(color, radius) {
             const f = document.getElementById('flash');
-            f.style.background = `radial-gradient(circle, #ffe4c4 0%, transparent 70%)`;
+            
+            // Анимация расширяющегося кольца (Ripple effect)
             f.style.transition = 'none';
-            f.style.opacity = '0.6';
+            f.style.width = '0px';
+            f.style.height = '0px';
+            f.style.border = `1px solid ${color}`;
+            f.style.opacity = '0.5';
             
             setTimeout(() => {
-                f.style.transition = 'opacity 0.8s ease-out';
+                f.style.transition = 'all 0.6s ease-out';
+                f.style.width = '80px';
+                f.style.height = '80px';
                 f.style.opacity = '0';
                 
-                const drop = Bodies.circle(W/2, H/2 - 20, radius, {
-                    restitution: 0.1,
-                    frictionAir: 0.05,
+                const drop = Bodies.circle(W/2, H/2, radius, {
+                    restitution: 0.05,
+                    frictionAir: 0.06,
                     render: { fillStyle: color }
                 });
                 
@@ -100,17 +107,15 @@
                 if (window.Telegram?.WebApp?.HapticFeedback) {
                     Telegram.WebApp.HapticFeedback.impactOccurred('light');
                 }
-            }, 50);
+            }, 10);
         }
 
-        // Фикс гироскопа: учитываем ориентацию
         window.addEventListener('deviceorientation', (e) => {
+            // Исправленная логика наклона без рывков
             let x = e.gamma || 0;
             let y = e.beta || 0;
-
-            // Ограничиваем углы, чтобы физика была предсказуемой
-            engine.gravity.x = Math.max(Math.min(x / 40, 1), -1);
-            engine.gravity.y = Math.max(Math.min(y / 40, 1), -1);
+            engine.gravity.x = Math.max(Math.min(x / 45, 1.2), -1.2);
+            engine.gravity.y = Math.max(Math.min(y / 45, 1.2), -1.2);
         });
 
         document.addEventListener('touchstart', () => {
