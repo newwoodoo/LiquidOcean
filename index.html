@@ -8,10 +8,11 @@
     <style>
         body { margin: 0; padding: 0; background: #020617; overflow: hidden; touch-action: none; }
         .header { position: absolute; top: 40px; width: 100%; display: flex; justify-content: space-around; z-index: 10; }
-        .btn { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
+        .btn { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); cursor: pointer; }
         #flash { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 80px; height: 80px; border-radius: 50%; opacity: 0; pointer-events: none; z-index: 5;
+            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+            width: 60px; height: 60px; border-radius: 50%; opacity: 0; pointer-events: none; z-index: 5;
+            transition: opacity 0.4s ease-out;
         }
         canvas { display: block; }
     </style>
@@ -26,40 +27,62 @@
     <div id="flash"></div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, Body } = Matter;
         const engine = Engine.create();
+        
+        // Замедляем время в мире для плавности (0.5 - в два раза медленнее)
+        engine.timing.timeScale = 0.6;
+
         const render = Render.create({
             element: document.body,
             engine: engine,
-            options: { width: window.innerWidth, height: window.innerHeight, wireframes: false, background: '#020617' }
+            options: { 
+                width: window.innerWidth, 
+                height: window.innerHeight, 
+                wireframes: false, 
+                background: '#020617' 
+            }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
+        // Толстые невидимые стены, чтобы ничего не улетало
+        const wallThickness = 100;
         const walls = [
-            Bodies.rectangle(window.innerWidth/2, window.innerHeight + 25, window.innerWidth, 50, { isStatic: true }),
-            Bodies.rectangle(-25, window.innerHeight/2, 50, window.innerHeight, { isStatic: true }),
-            Bodies.rectangle(window.innerWidth + 25, window.innerHeight/2, 50, window.innerHeight, { isStatic: true })
+            Bodies.rectangle(window.innerWidth/2, window.innerHeight + wallThickness/2, window.innerWidth, wallThickness, { isStatic: true }),
+            Bodies.rectangle(-wallThickness/2, window.innerHeight/2, wallThickness, window.innerHeight, { isStatic: true }),
+            Bodies.rectangle(window.innerWidth + wallThickness/2, window.innerHeight/2, wallThickness, window.innerHeight, { isStatic: true })
         ];
         Composite.add(engine.world, walls);
 
         function buy(color) {
             const f = document.getElementById('flash');
+            f.style.transition = 'none';
             f.style.background = `radial-gradient(circle, ${color} 0%, transparent 70%)`;
             f.style.opacity = '1';
             
             setTimeout(() => {
+                f.style.transition = 'opacity 0.6s ease-out';
                 f.style.opacity = '0';
-                const drop = Bodies.circle(window.innerWidth/2, window.innerHeight/2, 3, {
-                    restitution: 0.5, render: { fillStyle: color }
+                
+                // Создаем каплю чуть выше центра, чтобы она падала вниз
+                const drop = Bodies.circle(window.innerWidth/2, window.innerHeight/2 - 20, 2.5, {
+                    restitution: 0.1, // Почти не прыгает
+                    frictionAir: 0.05, // Сопротивление воздуха (плавность падения)
+                    render: { fillStyle: color },
+                    velocity: { x: 0, y: 0 } // Начальная скорость нулевая
                 });
+                
                 Composite.add(engine.world, drop);
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
             }, 100);
         }
 
+        // Плавный гироскоп
         window.addEventListener('deviceorientation', (e) => {
-            engine.gravity.x = e.gamma / 20;
-            engine.gravity.y = e.beta / 20;
+            // Делим на 60 для очень мягкого отклика
+            engine.gravity.x = (e.gamma || 0) / 60;
+            engine.gravity.y = (e.beta || 0) / 60;
         });
 
         document.addEventListener('touchstart', () => {
