@@ -15,7 +15,6 @@
             color: rgba(0, 0, 0, 0.3); transform: translateX(-50%);
             transition: all 4s cubic-bezier(0.1, 0, 0.2, 1); white-space: nowrap;
         }
-        canvas { display: block; }
     </style>
 </head>
 <body>
@@ -26,12 +25,9 @@
         <div class="btn" style="background: #ffffff;" onclick="buy('#ffffff', 3.5)"></div>
         <div class="btn" style="background: #9b89b3;" onclick="buy('#9b89b3', 4.4)"></div>
     </div>
-    <div id="liquid-container"></div>
-
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Events } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
         const engine = Engine.create();
-        
         const W = window.innerWidth, H = window.innerHeight, T = 1000;
         let state = 'normal'; // 'normal', 'rising', 'floating', 'falling'
 
@@ -48,39 +44,41 @@
             Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true }),
             Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true })
         ];
-        // Потолок на 50% высоты
-        const midCeiling = Bodies.rectangle(W/2, H * 0.5, W, 20, { isStatic: true, isSensor: true }); 
-        
-        Composite.add(engine.world, [...walls, midCeiling]);
+        Composite.add(engine.world, walls);
+
+        const limitY = H * 0.4; // Граница — 60% от низа (40% сверху)
 
         function buy(color, radius) {
             const drop = Bodies.circle(W/2, H/2, radius, {
                 restitution: 0.1, frictionAir: 0.04,
-                render: { fillStyle: color },
-                label: 'falling'
+                render: { fillStyle: color }, label: 'falling'
             });
             Composite.add(engine.world, drop);
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                Telegram.WebApp.HapticFeedback.impactOccurred('light');
-            }
+            if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
 
         Events.on(engine, 'beforeUpdate', () => {
-            if (state === 'rising') {
-                engine.gravity.y = -0.15; // Медленный взлет
-                midCeiling.isSensor = false;
-            } else if (state === 'floating') {
-                engine.gravity.y = 0; // Зависание (невесомость)
-                midCeiling.isSensor = false;
+            const bodies = Composite.allBodies(engine.world);
+            
+            if (state === 'rising' || state === 'floating') {
+                engine.gravity.y = state === 'rising' ? -0.1 : 0;
+                
+                bodies.forEach(body => {
+                    if (!body.isStatic) {
+                        // Если частица выше или на уровне лимита — стопорим её
+                        if (body.position.y <= limitY) {
+                            Body.setPosition(body, { x: body.position.x, y: limitY });
+                            Body.setVelocity(body, { x: body.velocity.x * 0.9, y: 0 });
+                        }
+                    }
+                });
             } else if (state === 'falling') {
-                engine.gravity.y = 1.2; // Падение
-                midCeiling.isSensor = true;
+                engine.gravity.y = 1.5;
             } else {
-                engine.gravity.y = 1.0; // Норма
-                midCeiling.isSensor = true;
+                engine.gravity.y = 1.0;
             }
 
-            Composite.allBodies(engine.world).forEach(body => {
+            bodies.forEach(body => {
                 if (!body.isStatic && body.label === 'falling') {
                     body.force.y = body.mass * 0.001;
                     body.force.x = 0;
@@ -106,26 +104,20 @@
         window.addEventListener('devicemotion', (e) => {
             const acc = e.acceleration;
             if (!acc || state !== 'normal') return;
-            if (Math.abs(acc.x - lastX) > 20) {
-                startSequence();
-            }
+            if (Math.abs(acc.x - lastX) > 20) startSequence();
             lastX = acc.x;
         });
 
         function startSequence() {
             state = 'rising';
             showName();
-            
-            // Взлетаем 2 секунды до середины
-            setTimeout(() => {
+            setTimeout(() => { 
                 state = 'floating';
-                // Висим 5 секунд
-                setTimeout(() => {
+                setTimeout(() => { 
                     state = 'falling';
-                    // Падаем 2 секунды до нормы
-                    setTimeout(() => { state = 'normal'; }, 2000);
+                    setTimeout(() => { state = 'normal'; }, 1500);
                 }, 5000);
-            }, 2000);
+            }, 2500);
         }
 
         function showName() {
@@ -137,9 +129,8 @@
             el.style.left = '50%';
             el.style.top = '70%'; 
             ui.appendChild(el);
-            
             setTimeout(() => { 
-                el.style.top = '45%'; 
+                el.style.top = (limitY + 30) + 'px'; 
                 el.style.opacity = '0'; 
             }, 50);
             setTimeout(() => el.remove(), 4000);
@@ -150,7 +141,6 @@
                 DeviceOrientationEvent.requestPermission();
             }
         }, {once: true});
-
         window.Telegram.WebApp.ready();
     </script>
 </body>
