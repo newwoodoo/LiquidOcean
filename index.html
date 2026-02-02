@@ -39,7 +39,6 @@
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        // Убираем верхний потолок совсем, будем ограничивать кодом
         const walls = [
             Bodies.rectangle(W/2, H + T/2 - 20, W * 2, T, { isStatic: true, friction: 0.1 }),
             Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true }),
@@ -47,7 +46,8 @@
         ];
         Composite.add(engine.world, walls);
 
-        const limitY = H * 0.45; // Линия остановки (чуть выше центра)
+        // Лимит высоты: 30% от верха экрана (пройдут 70% высоты)
+        const limitY = H * 0.3; 
 
         function buy(color, radius) {
             const drop = Bodies.circle(W/2, H/2, radius, {
@@ -62,66 +62,64 @@
             const bodies = Composite.allBodies(engine.world);
             
             if (state === 'rising' || state === 'floating') {
-                engine.gravity.y = state === 'rising' ? -0.08 : 0; // Очень медленно вверх
+                // Игнорируем гироскоп полностью: X = 0
+                engine.gravity.x = 0;
+                engine.gravity.y = state === 'rising' ? -0.12 : 0; 
                 
                 bodies.forEach(body => {
                     if (!body.isStatic) {
-                        // Жесткий стопор: если частица долетела до лимита
+                        // Если частица долетела до верхней границы
                         if (body.position.y <= limitY) {
-                            // Мгновенно фиксируем позицию и обнуляем вертикальную скорость
                             Body.setPosition(body, { x: body.position.x, y: limitY });
-                            Body.setVelocity(body, { x: body.velocity.x * 0.95, y: 0 });
+                            // Обнуляем вертикальную скорость, чтобы не "скакали"
+                            Body.setVelocity(body, { x: body.velocity.x * 0.9, y: 0 });
                         }
                     }
                 });
             } else if (state === 'falling') {
-                engine.gravity.y = 1.4; // Ускоренное падение
+                engine.gravity.y = 1.4;
             } else {
-                engine.gravity.y = 1.0; // Обычный режим
+                engine.gravity.y = 1.0;
             }
         });
 
         window.addEventListener('deviceorientation', (e) => {
+            // Применяем наклон только в обычном состоянии
             if (state === 'normal') {
                 engine.gravity.x = (e.gamma || 0) / 45;
                 engine.gravity.y = (e.beta || 0) / 45;
             }
         });
 
-        let lastAcc = 0;
         window.addEventListener('devicemotion', (e) => {
             const acc = e.acceleration;
             if (!acc || state !== 'normal') return;
-            let totalAcc = Math.abs(acc.x) + Math.abs(acc.y);
-            if (totalAcc > 25) startSequence();
+            if (Math.abs(acc.x) + Math.abs(acc.y) > 25) startSequence();
         });
 
         function startSequence() {
             state = 'rising';
             showName();
-            // Поднимаемся 3 секунды (медленно)
             setTimeout(() => { 
                 state = 'floating';
-                // Висим 5 секунд
                 setTimeout(() => { 
                     state = 'falling';
-                    // Падаем 1.5 секунды
                     setTimeout(() => { state = 'normal'; }, 1500);
                 }, 5000);
-            }, 3000);
+            }, 3500); // Даем больше времени на подъем
         }
 
         function showName() {
-            const name = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "GUEST";
+            const name = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "USER";
             const ui = document.getElementById('ui-layer');
             const el = document.createElement('div');
             el.className = 'nickname';
             el.innerText = name;
             el.style.left = '50%';
-            el.style.top = '75%'; 
+            el.style.top = '80%'; 
             ui.appendChild(el);
             setTimeout(() => { 
-                el.style.top = (limitY + 40) + 'px'; 
+                el.style.top = (limitY + 50) + 'px'; 
                 el.style.opacity = '0'; 
             }, 50);
             setTimeout(() => el.remove(), 4500);
