@@ -6,36 +6,58 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #F5F1E9; overflow: hidden; touch-action: none; font-family: -apple-system, system-ui, sans-serif; }
-        .header { position: absolute; top: 50px; width: 100%; display: flex; justify-content: space-around; z-index: 100; }
-        .btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; }
+        body { 
+            margin: 0; padding: 0; 
+            /* Дорогой градиент вместо плоского фона */
+            background: radial-gradient(circle at 50% 40%, #fdfcf9 0%, #e8e2d4 100%); 
+            overflow: hidden; touch-action: none; 
+            font-family: -apple-system, system-ui, sans-serif; 
+        }
+        .header { 
+            position: absolute; top: 50px; width: 100%; 
+            display: flex; justify-content: space-around; z-index: 100; 
+        }
+        .btn { 
+            width: 38px; height: 38px; border-radius: 50%; 
+            border: 2px solid rgba(0,0,0,0.15); cursor: pointer; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.9); }
+        
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 150; }
         .nickname {
-            position: absolute; font-size: 16px; font-weight: 500;
-            color: rgba(0, 0, 0, 0.3); transform: translateX(-50%);
+            position: absolute; font-size: 18px; font-weight: 600;
+            color: rgba(60, 50, 30, 0.5); transform: translateX(-50%);
             transition: all 4s ease-in-out; white-space: nowrap;
+            letter-spacing: 0.5px;
         }
     </style>
 </head>
 <body>
     <div id="ui-layer"></div>
     <div class="header">
-        <div class="btn" style="background: #79addc;" onclick="buy('#79addc', 2.2)"></div>
-        <div class="btn" style="background: #a3c586;" onclick="buy('#a3c586', 2.9)"></div>
-        <div class="btn" style="background: #ffffff;" onclick="buy('#ffffff', 3.5)"></div>
-        <div class="btn" style="background: #9b89b3;" onclick="buy('#9b89b3', 4.4)"></div>
+        <div class="btn" style="background: #5faad9;" onclick="buy('#5faad9', 2.5)"></div>
+        <div class="btn" style="background: #8ec46a;" onclick="buy('#8ec46a', 3.2)"></div>
+        <div class="btn" style="background: #ffffff;" onclick="buy('#ffffff', 4.0)"></div>
+        <div class="btn" style="background: #8b6eb3;" onclick="buy('#8b6eb3', 5.0)"></div>
     </div>
     <script>
         const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
         const engine = Engine.create();
         const W = window.innerWidth, H = window.innerHeight, T = 1000;
-        let state = 'normal'; // 'normal', 'rising', 'floating', 'falling'
+        let state = 'normal';
         let gyroX = 0, gyroY = 1;
 
         const render = Render.create({
             element: document.body,
             engine: engine,
-            options: { width: W, height: H, wireframes: false, background: 'transparent' }
+            options: { 
+                width: W, height: H, 
+                wireframes: false, 
+                background: 'transparent',
+                pixelRatio: window.devicePixelRatio
+            }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
@@ -47,13 +69,17 @@
         ];
         Composite.add(engine.world, walls);
 
-        const limitY = H * 0.2; // 80% экрана снизу
+        const limitY = H * 0.25; 
 
         function buy(color, radius) {
             const drop = Bodies.circle(W/2, H/2 - 50, radius, {
-                restitution: 0.1, frictionAir: 0.05,
-                render: { fillStyle: color }, 
-                isMine: true, // Помечаем как свои
+                restitution: 0.2, frictionAir: 0.05,
+                render: { 
+                    fillStyle: color,
+                    strokeStyle: 'rgba(0,0,0,0.2)', // Тонкая темная обводка
+                    lineWidth: 1
+                }, 
+                isMine: true,
                 label: 'new'
             });
             Composite.add(engine.world, drop);
@@ -62,44 +88,37 @@
 
         Events.on(engine, 'beforeUpdate', () => {
             const bodies = Composite.allBodies(engine.world);
-            
             bodies.forEach(body => {
                 if (body.isStatic) return;
 
-                // Новые капли падают строго вертикально
                 if (body.label === 'new') {
                     Body.setVelocity(body, { x: 0, y: body.velocity.y });
                 }
 
-                // Логика анимации "своих" частиц
                 if (body.isMine) {
                     if (state === 'rising') {
-                        // Плавное притягивание к лимиту по вертикали и удержание по горизонтали
                         const dy = limitY - body.position.y;
-                        Body.setVelocity(body, { x: 0, y: dy * 0.05 });
+                        Body.setVelocity(body, { x: 0, y: dy * 0.06 });
                         if (Math.abs(dy) < 5) Body.setPosition(body, { x: body.position.x, y: limitY });
                     } else if (state === 'floating') {
-                        // Полная заморозка в воздухе
                         Body.setVelocity(body, { x: 0, y: 0 });
                         Body.setPosition(body, { x: body.position.x, y: limitY });
                     }
                 }
             });
 
-            // Гироскоп работает только для обычного состояния
             if (state === 'normal' || state === 'falling') {
                 engine.gravity.x = gyroX;
-                engine.gravity.y = state === 'falling' ? 1.5 : gyroY;
+                engine.gravity.y = state === 'falling' ? 1.6 : gyroY;
             } else {
-                engine.gravity.x = 0;
-                engine.gravity.y = 0;
+                engine.gravity.x = 0; engine.gravity.y = 0;
             }
         });
 
-        Events.on(engine, 'collisionStart', (event) => {
-            event.pairs.forEach(pair => {
-                if (pair.bodyA.label === 'new') pair.bodyA.label = 'liquid';
-                if (pair.bodyB.label === 'new') pair.bodyB.label = 'liquid';
+        Events.on(engine, 'collisionStart', (e) => {
+            e.pairs.forEach(p => {
+                if (p.bodyA.label === 'new') p.bodyA.label = 'liquid';
+                if (p.bodyB.label === 'new') p.bodyB.label = 'liquid';
             });
         });
 
@@ -111,7 +130,7 @@
         window.addEventListener('devicemotion', (e) => {
             const acc = e.acceleration;
             if (!acc || state !== 'normal') return;
-            if (Math.abs(acc.x) + Math.abs(acc.y) > 22) {
+            if (Math.abs(acc.x) + Math.abs(acc.y) > 24) {
                 state = 'rising';
                 showName();
                 setTimeout(() => { 
@@ -120,21 +139,21 @@
                         state = 'falling';
                         setTimeout(() => { state = 'normal'; }, 2000);
                     }, 5000);
-                }, 3000);
+                }, 2500);
             }
         });
 
         function showName() {
-            const name = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "USER";
+            const name = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "GUEST";
             const ui = document.getElementById('ui-layer');
             const el = document.createElement('div');
             el.className = 'nickname';
-            el.innerText = name;
+            el.innerText = name.toUpperCase();
             el.style.left = '50%';
             el.style.top = '80%'; 
             ui.appendChild(el);
             setTimeout(() => { 
-                el.style.top = (limitY + 50) + 'px'; 
+                el.style.top = (limitY + 60) + 'px'; 
                 el.style.opacity = '0'; 
             }, 50);
             setTimeout(() => el.remove(), 4500);
