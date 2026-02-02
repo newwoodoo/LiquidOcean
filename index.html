@@ -8,8 +8,8 @@
     <style>
         body { 
             margin: 0; padding: 0; 
-            /* Дорогой градиент вместо плоского фона */
-            background: radial-gradient(circle at 50% 40%, #fdfcf9 0%, #e8e2d4 100%); 
+            /* Темный премиальный фон для максимальной видимости */
+            background: #1a1a1a; 
             overflow: hidden; touch-action: none; 
             font-family: -apple-system, system-ui, sans-serif; 
         }
@@ -18,45 +18,38 @@
             display: flex; justify-content: space-around; z-index: 100; 
         }
         .btn { 
-            width: 38px; height: 38px; border-radius: 50%; 
-            border: 2px solid rgba(0,0,0,0.15); cursor: pointer; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            transition: transform 0.1s;
+            width: 40px; height: 40px; border-radius: 50%; 
+            border: 2px solid rgba(255,255,255,0.2); cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .btn:active { transform: scale(0.9); }
-        
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 150; }
         .nickname {
-            position: absolute; font-size: 18px; font-weight: 600;
-            color: rgba(60, 50, 30, 0.5); transform: translateX(-50%);
+            position: absolute; font-size: 20px; font-weight: 600;
+            color: #e8e2d4; transform: translateX(-50%);
             transition: all 4s ease-in-out; white-space: nowrap;
-            letter-spacing: 0.5px;
+            letter-spacing: 2px; text-shadow: 0 0 10px rgba(232,226,212,0.3);
         }
     </style>
 </head>
 <body>
     <div id="ui-layer"></div>
     <div class="header">
-        <div class="btn" style="background: #5faad9;" onclick="buy('#5faad9', 2.5)"></div>
-        <div class="btn" style="background: #8ec46a;" onclick="buy('#8ec46a', 3.2)"></div>
-        <div class="btn" style="background: #ffffff;" onclick="buy('#ffffff', 4.0)"></div>
-        <div class="btn" style="background: #8b6eb3;" onclick="buy('#8b6eb3', 5.0)"></div>
+        <div class="btn" style="background: #3498db;" onclick="buy('#3498db', 2.8)"></div>
+        <div class="btn" style="background: #2ecc71;" onclick="buy('#2ecc71', 3.5)"></div>
+        <div class="btn" style="background: #f1c40f;" onclick="buy('#f1c40f', 4.2)"></div>
+        <div class="btn" style="background: #9b59b6;" onclick="buy('#9b59b6', 5.5)"></div>
     </div>
     <script>
         const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
         const engine = Engine.create();
         const W = window.innerWidth, H = window.innerHeight, T = 1000;
-        let state = 'normal';
-        let gyroX = 0, gyroY = 1;
+        let state = 'normal', gyroX = 0, gyroY = 1;
 
         const render = Render.create({
-            element: document.body,
-            engine: engine,
+            element: document.body, engine: engine,
             options: { 
-                width: W, height: H, 
-                wireframes: false, 
-                background: 'transparent',
-                pixelRatio: window.devicePixelRatio
+                width: W, height: H, wireframes: false, 
+                background: 'transparent', pixelRatio: window.devicePixelRatio 
             }
         });
         Render.run(render);
@@ -69,47 +62,38 @@
         ];
         Composite.add(engine.world, walls);
 
-        const limitY = H * 0.25; 
+        const limitY = H * 0.22; 
 
         function buy(color, radius) {
             const drop = Bodies.circle(W/2, H/2 - 50, radius, {
                 restitution: 0.2, frictionAir: 0.05,
                 render: { 
                     fillStyle: color,
-                    strokeStyle: 'rgba(0,0,0,0.2)', // Тонкая темная обводка
-                    lineWidth: 1
+                    strokeStyle: '#ffffff', // Белая тонкая обводка для четкости на темном
+                    lineWidth: 0.5
                 }, 
-                isMine: true,
-                label: 'new'
+                isMine: true, label: 'new'
             });
             Composite.add(engine.world, drop);
-            if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred('light');
+            if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred('medium');
         }
 
         Events.on(engine, 'beforeUpdate', () => {
-            const bodies = Composite.allBodies(engine.world);
-            bodies.forEach(body => {
+            Composite.allBodies(engine.world).forEach(body => {
                 if (body.isStatic) return;
-
-                if (body.label === 'new') {
-                    Body.setVelocity(body, { x: 0, y: body.velocity.y });
-                }
-
+                if (body.label === 'new') Body.setVelocity(body, { x: 0, y: body.velocity.y });
                 if (body.isMine) {
                     if (state === 'rising') {
                         const dy = limitY - body.position.y;
-                        Body.setVelocity(body, { x: 0, y: dy * 0.06 });
-                        if (Math.abs(dy) < 5) Body.setPosition(body, { x: body.position.x, y: limitY });
+                        Body.setVelocity(body, { x: 0, y: dy * 0.07 });
                     } else if (state === 'floating') {
                         Body.setVelocity(body, { x: 0, y: 0 });
                         Body.setPosition(body, { x: body.position.x, y: limitY });
                     }
                 }
             });
-
             if (state === 'normal' || state === 'falling') {
-                engine.gravity.x = gyroX;
-                engine.gravity.y = state === 'falling' ? 1.6 : gyroY;
+                engine.gravity.x = gyroX; engine.gravity.y = state === 'falling' ? 1.8 : gyroY;
             } else {
                 engine.gravity.x = 0; engine.gravity.y = 0;
             }
@@ -123,23 +107,19 @@
         });
 
         window.addEventListener('deviceorientation', (e) => {
-            gyroX = (e.gamma || 0) / 45;
-            gyroY = (e.beta || 0) / 45;
+            gyroX = (e.gamma || 0) / 45; gyroY = (e.beta || 0) / 45;
         });
 
         window.addEventListener('devicemotion', (e) => {
             const acc = e.acceleration;
             if (!acc || state !== 'normal') return;
-            if (Math.abs(acc.x) + Math.abs(acc.y) > 24) {
-                state = 'rising';
-                showName();
-                setTimeout(() => { 
-                    state = 'floating';
-                    setTimeout(() => { 
-                        state = 'falling';
+            if (Math.abs(acc.x) + Math.abs(acc.y) > 25) {
+                state = 'rising'; showName();
+                setTimeout(() => { state = 'floating'; 
+                    setTimeout(() => { state = 'falling'; 
                         setTimeout(() => { state = 'normal'; }, 2000);
                     }, 5000);
-                }, 2500);
+                }, 2800);
             }
         });
 
@@ -149,20 +129,14 @@
             const el = document.createElement('div');
             el.className = 'nickname';
             el.innerText = name.toUpperCase();
-            el.style.left = '50%';
-            el.style.top = '80%'; 
+            el.style.left = '50%'; el.style.top = '85%'; 
             ui.appendChild(el);
-            setTimeout(() => { 
-                el.style.top = (limitY + 60) + 'px'; 
-                el.style.opacity = '0'; 
-            }, 50);
+            setTimeout(() => { el.style.top = (limitY + 60) + 'px'; el.style.opacity = '0'; }, 100);
             setTimeout(() => el.remove(), 4500);
         }
 
         document.addEventListener('touchstart', () => {
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission();
-            }
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission();
         }, {once: true});
         window.Telegram.WebApp.ready();
     </script>
