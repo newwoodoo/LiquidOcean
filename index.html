@@ -13,7 +13,7 @@
         .nickname {
             position: absolute; font-size: 16px; font-weight: 500;
             color: rgba(0, 0, 0, 0.3); transform: translateX(-50%);
-            transition: all 2.5s cubic-bezier(0.2, 0, 0.3, 1); white-space: nowrap;
+            transition: all 4s cubic-bezier(0.1, 0, 0.2, 1); white-space: nowrap;
         }
         canvas { display: block; }
     </style>
@@ -29,12 +29,11 @@
     <div id="liquid-container"></div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Events, World } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, Events } = Matter;
         const engine = Engine.create();
         
         const W = window.innerWidth, H = window.innerHeight, T = 1000;
-        let isShaking = false;
-        let fallingDown = false;
+        let state = 'normal'; // 'normal', 'rising', 'floating', 'falling'
 
         const render = Render.create({
             element: document.body,
@@ -44,20 +43,19 @@
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        // Основные стены
         const walls = [
             Bodies.rectangle(W/2, H + T/2 - 20, W * 2, T, { isStatic: true, friction: 0.1 }),
             Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true }),
             Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true })
         ];
-        // Невидимый потолок посередине (активируется при встряске)
-        const midCeiling = Bodies.rectangle(W/2, H * 0.4, W, 20, { isStatic: true, isSensor: true }); 
+        // Потолок на 50% высоты
+        const midCeiling = Bodies.rectangle(W/2, H * 0.5, W, 20, { isStatic: true, isSensor: true }); 
         
         Composite.add(engine.world, [...walls, midCeiling]);
 
         function buy(color, radius) {
             const drop = Bodies.circle(W/2, H/2, radius, {
-                restitution: 0.1, frictionAir: 0.03,
+                restitution: 0.1, frictionAir: 0.04,
                 render: { fillStyle: color },
                 label: 'falling'
             });
@@ -68,23 +66,22 @@
         }
 
         Events.on(engine, 'beforeUpdate', () => {
-            const bodies = Composite.allBodies(engine.world);
-            
-            // Настройка гравитации в зависимости от состояния
-            if (isShaking) {
-                engine.gravity.y = -0.3; // Плавное всплытие вверх
-                midCeiling.isSensor = false; // Барьер становится твердым
-            } else if (fallingDown) {
-                engine.gravity.y = 1.5; // Ускоренное падение вниз
+            if (state === 'rising') {
+                engine.gravity.y = -0.15; // Медленный взлет
+                midCeiling.isSensor = false;
+            } else if (state === 'floating') {
+                engine.gravity.y = 0; // Зависание (невесомость)
+                midCeiling.isSensor = false;
+            } else if (state === 'falling') {
+                engine.gravity.y = 1.2; // Падение
                 midCeiling.isSensor = true;
             } else {
-                engine.gravity.y = 1.0; // Обычная гравитация
+                engine.gravity.y = 1.0; // Норма
                 midCeiling.isSensor = true;
             }
 
-            bodies.forEach(body => {
+            Composite.allBodies(engine.world).forEach(body => {
                 if (!body.isStatic && body.label === 'falling') {
-                    // Пока падает новая капля — она игнорирует общий хаос
                     body.force.y = body.mass * 0.001;
                     body.force.x = 0;
                 }
@@ -99,7 +96,7 @@
         });
 
         window.addEventListener('deviceorientation', (e) => {
-            if (!isShaking && !fallingDown) {
+            if (state === 'normal') {
                 engine.gravity.x = (e.gamma || 0) / 50;
                 engine.gravity.y = (e.beta || 0) / 50;
             }
@@ -108,24 +105,27 @@
         let lastX = 0;
         window.addEventListener('devicemotion', (e) => {
             const acc = e.acceleration;
-            if (!acc || isShaking || fallingDown) return;
-            if (Math.abs(acc.x - lastX) > 18) {
-                startShakeEffect();
+            if (!acc || state !== 'normal') return;
+            if (Math.abs(acc.x - lastX) > 20) {
+                startSequence();
             }
             lastX = acc.x;
         });
 
-        function startShakeEffect() {
-            isShaking = true;
+        function startSequence() {
+            state = 'rising';
             showName();
             
-            // Через 4 секунды начинаем падение
+            // Взлетаем 2 секунды до середины
             setTimeout(() => {
-                isShaking = false;
-                fallingDown = true;
-                // Через 2 секунды падения возвращаемся в норму
-                setTimeout(() => { fallingDown = false; }, 2000);
-            }, 4000);
+                state = 'floating';
+                // Висим 5 секунд
+                setTimeout(() => {
+                    state = 'falling';
+                    // Падаем 2 секунды до нормы
+                    setTimeout(() => { state = 'normal'; }, 2000);
+                }, 5000);
+            }, 2000);
         }
 
         function showName() {
@@ -135,14 +135,14 @@
             el.className = 'nickname';
             el.innerText = name;
             el.style.left = '50%';
-            el.style.top = '60%'; // Начало чуть ниже центра
+            el.style.top = '70%'; 
             ui.appendChild(el);
             
             setTimeout(() => { 
-                el.style.top = '35%'; // Всплывает до уровня капель
+                el.style.top = '45%'; 
                 el.style.opacity = '0'; 
             }, 50);
-            setTimeout(() => el.remove(), 3000);
+            setTimeout(() => el.remove(), 4000);
         }
 
         document.addEventListener('touchstart', () => {
