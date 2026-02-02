@@ -6,25 +6,29 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #F5F1E9; overflow: hidden; touch-action: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .header { position: absolute; top: 50px; width: 100%; display: flex; justify-content: space-around; z-index: 100; }
-        .btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.1s; }
-        .btn:active { transform: scale(0.9); }
-        #flash { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); width: 1px; height: 1px; border-radius: 50%; opacity: 0; pointer-events: none; z-index: 50; }
-        
-        /* Слой для всплывающих ников */
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 150; }
-        .nickname {
-            position: absolute;
-            font-size: 14px;
-            font-weight: 500;
-            color: rgba(0, 0, 0, 0.4);
-            transform: translate(-50%, 0);
-            transition: all 3s ease-out;
-            white-space: nowrap;
+        body { 
+            margin: 0; padding: 0; background: #F5F1E9; 
+            overflow: hidden; touch-action: none; 
+            font-family: -apple-system, system-ui, sans-serif; 
         }
-        
-        #liquid-container { width: 100vw; height: 100vh; background: transparent; }
+        .header { 
+            position: absolute; top: 50px; width: 100%; 
+            display: flex; justify-content: space-around; z-index: 100; 
+        }
+        .btn { 
+            width: 36px; height: 36px; border-radius: 50%; 
+            border: 1px solid rgba(0,0,0,0.1); cursor: pointer; 
+        }
+        #ui-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; z-index: 150; 
+        }
+        .nickname {
+            position: absolute; font-size: 16px; font-weight: 500;
+            color: rgba(0, 0, 0, 0.3); transform: translateX(-50%);
+            transition: all 3s ease-out; white-space: nowrap;
+        }
+        canvas { display: block; }
     </style>
 </head>
 <body>
@@ -35,72 +39,56 @@
         <div class="btn" style="background: #ffffff;" onclick="buy('#ffffff', 3.5)"></div>
         <div class="btn" style="background: #9b89b3;" onclick="buy('#9b89b3', 4.4)"></div>
     </div>
-    <div id="flash"></div>
     <div id="liquid-container"></div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, Events } = Matter;
         const engine = Engine.create();
         engine.timing.timeScale = 0.8;
 
-        let targetGravity = { x: 0, y: 1 };
-        let currentGravity = { x: 0, y: 1 };
-        let isShaking = false;
-
         const render = Render.create({
-            element: document.getElementById('liquid-container'),
+            element: document.body,
             engine: engine,
-            options: { width: window.innerWidth, height: window.innerHeight, wireframes: false, background: 'transparent' }
+            options: { 
+                width: window.innerWidth, height: window.innerHeight, 
+                wireframes: false, background: 'transparent' 
+            }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        const T = 1000, W = window.innerWidth, H = window.innerHeight, safeArea = 15;
+        const W = window.innerWidth, H = window.innerHeight, T = 1000;
         const walls = [
-            Bodies.rectangle(W/2, H + T/2 - safeArea, W * 2, T, { isStatic: true, friction: 0.05 }),
-            Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true, friction: 0.05 }),
-            Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true, friction: 0.05 }),
-            Bodies.rectangle(W/2, -T/2, W * 2, T, { isStatic: true }) // Потолок для всплытия
+            Bodies.rectangle(W/2, H + T/2 - 20, W * 2, T, { isStatic: true, friction: 0.1 }),
+            Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true }),
+            Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true }),
+            Bodies.rectangle(W/2, -T/2, W * 2, T, { isStatic: true })
         ];
         Composite.add(engine.world, walls);
 
+        let isShaking = false;
+
         function buy(color, radius) {
-            const f = document.getElementById('flash');
-            f.style.transition = 'none'; f.style.width = '0px'; f.style.height = '0px';
-            f.style.border = `1px solid ${color}`; f.style.opacity = '0.5';
-            
-            setTimeout(() => {
-                f.style.transition = 'all 0.6s ease-out'; f.style.width = '80px'; f.style.height = '80px'; f.style.opacity = '0';
-                
-                const drop = Bodies.circle(W/2, H/2, radius, {
-                    restitution: 0.1,
-                    frictionAir: 0.02,
-                    render: { fillStyle: color },
-                    label: 'falling',
-                    isMine: true // Помечаем как свои
-                });
-                
-                Composite.add(engine.world, drop);
+            const drop = Bodies.circle(W/2, H/2, radius, {
+                restitution: 0.1, frictionAir: 0.02,
+                render: { fillStyle: color },
+                label: 'falling'
+            });
+            Composite.add(engine.world, drop);
+            if (window.Telegram?.WebApp?.HapticFeedback) {
                 Telegram.WebApp.HapticFeedback.impactOccurred('light');
-            }, 10);
+            }
         }
 
-        // Логика поведения частиц
         Events.on(engine, 'beforeUpdate', () => {
-            currentGravity.x += (targetGravity.x - currentGravity.x) * 0.05;
-            currentGravity.y += (targetGravity.y - currentGravity.y) * 0.05;
-
-            Composite.allBodies(engine.world).forEach(body => {
+            const bodies = Composite.allBodies(engine.world);
+            bodies.forEach(body => {
                 if (!body.isStatic) {
                     if (body.label === 'falling') {
-                        body.force.y = body.mass * 0.001; 
+                        body.force.y = body.mass * 0.001;
                         body.force.x = 0;
-                    } else if (isShaking && body.isMine) {
-                        // Всплытие вверх при встряске
-                        body.force.y = -body.mass * 0.004; 
-                    } else {
-                        engine.gravity.x = currentGravity.x;
-                        engine.gravity.y = currentGravity.y;
+                    } else if (isShaking) {
+                        body.force.y = -body.mass * 0.005; // Летим вверх
                     }
                 }
             });
@@ -113,57 +101,39 @@
             });
         });
 
-        // Функция встряски
-        function handleShake() {
-            if (isShaking) return;
-            isShaking = true;
-            
-            // Показываем ник
-            const name = Telegram.WebApp.initDataUnsafe?.user?.first_name || "User";
-            showNickname(name);
+        // Гироскоп
+        window.addEventListener('deviceorientation', (e) => {
+            if (!isShaking) {
+                engine.gravity.x = (e.gamma || 0) / 50;
+                engine.gravity.y = (e.beta || 0) / 50;
+            }
+        });
 
-            Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        // Встряска
+        let lastX = 0, lastY = 0;
+        window.addEventListener('devicemotion', (e) => {
+            const acc = e.acceleration;
+            if (!acc || isShaking) return;
+            if (Math.abs(acc.x - lastX) > 15 || Math.abs(acc.y - lastY) > 15) {
+                isShaking = true;
+                showName();
+                setTimeout(() => { isShaking = false; }, 5000);
+            }
+            lastX = acc.x; lastY = acc.y;
+        });
 
-            // Через 5 секунд возвращаем обычную гравитацию
-            setTimeout(() => {
-                isShaking = false;
-            }, 5000);
-        }
-
-        function showNickname(name) {
+        function showName() {
+            const name = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "GUEST";
             const ui = document.getElementById('ui-layer');
             const el = document.createElement('div');
             el.className = 'nickname';
             el.innerText = name;
             el.style.left = '50%';
-            el.style.top = '40%';
+            el.style.top = '50%';
             ui.appendChild(el);
-
-            setTimeout(() => {
-                el.style.top = '20%';
-                el.style.opacity = '0';
-            }, 50);
-
+            setTimeout(() => { el.style.top = '20%'; el.style.opacity = '0'; }, 50);
             setTimeout(() => el.remove(), 3500);
         }
-
-        // Детектор встряски
-        let lastAcc = { x: 0, y: 0, z: 0 };
-        window.addEventListener('devicemotion', (e) => {
-            const acc = e.acceleration;
-            if (!acc) return;
-            
-            const change = Math.abs(acc.x - lastAcc.x) + Math.abs(acc.y - lastAcc.y);
-            if (change > 20) { // Порог встряски
-                handleShake();
-            }
-            lastAcc = { x: acc.x, y: acc.y, z: acc.z };
-        });
-
-        window.addEventListener('deviceorientation', (e) => {
-            targetGravity.x = Math.max(Math.min((e.gamma || 0) / 45, 1.2), -1.2);
-            targetGravity.y = Math.max(Math.min((e.beta || 0) / 45, 1.2), -1.2);
-        });
 
         document.addEventListener('touchstart', () => {
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -171,7 +141,7 @@
             }
         }, {once: true});
 
-        Telegram.WebApp.ready();
+        window.Telegram.WebApp.ready();
     </script>
 </body>
 </html>
