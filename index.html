@@ -6,27 +6,14 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { 
-            margin: 0; padding: 0; background: #F5F1E9; 
-            overflow: hidden; touch-action: none; 
-            font-family: -apple-system, system-ui, sans-serif; 
-        }
-        .header { 
-            position: absolute; top: 50px; width: 100%; 
-            display: flex; justify-content: space-around; z-index: 100; 
-        }
-        .btn { 
-            width: 36px; height: 36px; border-radius: 50%; 
-            border: 1px solid rgba(0,0,0,0.1); cursor: pointer; 
-        }
-        #ui-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            pointer-events: none; z-index: 150; 
-        }
+        body { margin: 0; padding: 0; background: #F5F1E9; overflow: hidden; touch-action: none; font-family: -apple-system, system-ui, sans-serif; }
+        .header { position: absolute; top: 50px; width: 100%; display: flex; justify-content: space-around; z-index: 100; }
+        .btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 150; }
         .nickname {
             position: absolute; font-size: 16px; font-weight: 500;
             color: rgba(0, 0, 0, 0.3); transform: translateX(-50%);
-            transition: all 3s ease-out; white-space: nowrap;
+            transition: all 2.5s cubic-bezier(0.2, 0, 0.3, 1); white-space: nowrap;
         }
         canvas { display: block; }
     </style>
@@ -42,35 +29,35 @@
     <div id="liquid-container"></div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Events } = Matter;
+        const { Engine, Render, Runner, Bodies, Composite, Events, World } = Matter;
         const engine = Engine.create();
-        engine.timing.timeScale = 0.8;
+        
+        const W = window.innerWidth, H = window.innerHeight, T = 1000;
+        let isShaking = false;
+        let fallingDown = false;
 
         const render = Render.create({
             element: document.body,
             engine: engine,
-            options: { 
-                width: window.innerWidth, height: window.innerHeight, 
-                wireframes: false, background: 'transparent' 
-            }
+            options: { width: W, height: H, wireframes: false, background: 'transparent' }
         });
         Render.run(render);
         Runner.run(Runner.create(), engine);
 
-        const W = window.innerWidth, H = window.innerHeight, T = 1000;
+        // Основные стены
         const walls = [
             Bodies.rectangle(W/2, H + T/2 - 20, W * 2, T, { isStatic: true, friction: 0.1 }),
             Bodies.rectangle(-T/2, H/2, T, H * 2, { isStatic: true }),
-            Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true }),
-            Bodies.rectangle(W/2, -T/2, W * 2, T, { isStatic: true })
+            Bodies.rectangle(W + T/2, H/2, T, H * 2, { isStatic: true })
         ];
-        Composite.add(engine.world, walls);
-
-        let isShaking = false;
+        // Невидимый потолок посередине (активируется при встряске)
+        const midCeiling = Bodies.rectangle(W/2, H * 0.4, W, 20, { isStatic: true, isSensor: true }); 
+        
+        Composite.add(engine.world, [...walls, midCeiling]);
 
         function buy(color, radius) {
             const drop = Bodies.circle(W/2, H/2, radius, {
-                restitution: 0.1, frictionAir: 0.02,
+                restitution: 0.1, frictionAir: 0.03,
                 render: { fillStyle: color },
                 label: 'falling'
             });
@@ -82,14 +69,24 @@
 
         Events.on(engine, 'beforeUpdate', () => {
             const bodies = Composite.allBodies(engine.world);
+            
+            // Настройка гравитации в зависимости от состояния
+            if (isShaking) {
+                engine.gravity.y = -0.3; // Плавное всплытие вверх
+                midCeiling.isSensor = false; // Барьер становится твердым
+            } else if (fallingDown) {
+                engine.gravity.y = 1.5; // Ускоренное падение вниз
+                midCeiling.isSensor = true;
+            } else {
+                engine.gravity.y = 1.0; // Обычная гравитация
+                midCeiling.isSensor = true;
+            }
+
             bodies.forEach(body => {
-                if (!body.isStatic) {
-                    if (body.label === 'falling') {
-                        body.force.y = body.mass * 0.001;
-                        body.force.x = 0;
-                    } else if (isShaking) {
-                        body.force.y = -body.mass * 0.005; // Летим вверх
-                    }
+                if (!body.isStatic && body.label === 'falling') {
+                    // Пока падает новая капля — она игнорирует общий хаос
+                    body.force.y = body.mass * 0.001;
+                    body.force.x = 0;
                 }
             });
         });
@@ -101,26 +98,35 @@
             });
         });
 
-        // Гироскоп
         window.addEventListener('deviceorientation', (e) => {
-            if (!isShaking) {
+            if (!isShaking && !fallingDown) {
                 engine.gravity.x = (e.gamma || 0) / 50;
                 engine.gravity.y = (e.beta || 0) / 50;
             }
         });
 
-        // Встряска
-        let lastX = 0, lastY = 0;
+        let lastX = 0;
         window.addEventListener('devicemotion', (e) => {
             const acc = e.acceleration;
-            if (!acc || isShaking) return;
-            if (Math.abs(acc.x - lastX) > 15 || Math.abs(acc.y - lastY) > 15) {
-                isShaking = true;
-                showName();
-                setTimeout(() => { isShaking = false; }, 5000);
+            if (!acc || isShaking || fallingDown) return;
+            if (Math.abs(acc.x - lastX) > 18) {
+                startShakeEffect();
             }
-            lastX = acc.x; lastY = acc.y;
+            lastX = acc.x;
         });
+
+        function startShakeEffect() {
+            isShaking = true;
+            showName();
+            
+            // Через 4 секунды начинаем падение
+            setTimeout(() => {
+                isShaking = false;
+                fallingDown = true;
+                // Через 2 секунды падения возвращаемся в норму
+                setTimeout(() => { fallingDown = false; }, 2000);
+            }, 4000);
+        }
 
         function showName() {
             const name = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "GUEST";
@@ -129,10 +135,14 @@
             el.className = 'nickname';
             el.innerText = name;
             el.style.left = '50%';
-            el.style.top = '50%';
+            el.style.top = '60%'; // Начало чуть ниже центра
             ui.appendChild(el);
-            setTimeout(() => { el.style.top = '20%'; el.style.opacity = '0'; }, 50);
-            setTimeout(() => el.remove(), 3500);
+            
+            setTimeout(() => { 
+                el.style.top = '35%'; // Всплывает до уровня капель
+                el.style.opacity = '0'; 
+            }, 50);
+            setTimeout(() => el.remove(), 3000);
         }
 
         document.addEventListener('touchstart', () => {
