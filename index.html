@@ -224,23 +224,3 @@
     </script>
 </body>
 </html>
-b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad) scale(${Math.max(1, scale/3)})`;
-                    }
-                }
-            });
-        });
-
-        function updateTransform() {
-            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-            if(cometPending) {
-                const aim = document.getElementById('aim-ui');
-                aim.style.left = (cometPending.wx * scale + offsetX) + 'px';
-                aim.style.top = (cometPending.wy * scale + offsetY) + 'px';
-            }
-        }
-
-        function haptic(s) { if(window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred(s); }
-        window.Telegram.WebApp.ready();
-    </script>
-</body>
-</html>
