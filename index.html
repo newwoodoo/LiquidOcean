@@ -9,34 +9,44 @@
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        .ui-panel { position: absolute; bottom: 0; width: 100%; height: 100px; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; gap: 10px; z-index: 10000; }
-        .btn { width: 50px; height: 50px; border-radius: 12px; background: #333; color: #fff; display: flex; align-items: center; justify-content: center; border: 2px solid #555; }
-        .btn.active-launch { border-color: #f1c40f; color: #f1c40f; }
+        .ui-panel { position: absolute; bottom: 0; width: 100%; height: 90px; background: #111; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 10000; width: 100%; border-top: 2px solid #333; }
+        .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; color: #fff; display: flex; align-items: center; justify-content: center; border: 2px solid #444; font-weight: bold; }
+        .btn.active-launch { background: #f1c40f; color: #000; border-color: #fff; }
 
-        /* КОМЕТА - МАКСИМАЛЬНАЯ ЯРКОСТЬ */
-        .comet-entity { position: absolute; width: 80px; height: 80px; pointer-events: none; z-index: 9999 !important; }
-        
-        /* Хвост */
-        .comet-tail-v { 
-            position: absolute; top: 40px; left: 30px; width: 20px; height: 300px; 
-            background: #ff4500; /* Яркий сплошной цвет */
-            box-shadow: 0 0 30px #ff8c00;
-            border-radius: 10px; transform-origin: top center; 
+        /* КОМЕТА - ТЕПЕРЬ ОНА ГИГАНТСКАЯ И ЯРКАЯ */
+        .comet-super-visible { 
+            position: absolute; 
+            width: 40px; 
+            height: 40px; 
+            background: #fff; /* Белое ядро */
+            border-radius: 50%;
+            box-shadow: 
+                0 0 20px 10px #fff,    /* Внутреннее свечение */
+                0 0 40px 20px #ff4500, /* Оранжевый ореол */
+                0 0 60px 40px #ff0000; /* Красное облако вокруг */
+            z-index: 9999 !important;
+            pointer-events: none;
         }
 
-        /* Ядро */
-        .comet-head-v {
-            position: absolute; top: 40px; left: 40px; transform: translate(-50%, -50%);
-            width: 30px; height: 30px; background: #fff; border-radius: 50%;
-            border: 4px solid #ffae00; box-shadow: 0 0 40px 15px #fff;
+        /* ХВОСТ - Прямой и длинный */
+        .comet-super-visible::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 10px;
+            width: 20px;
+            height: 200px;
+            background: linear-gradient(to bottom, #ff4500, transparent);
+            border-radius: 10px;
+            transform-origin: top center;
         }
 
         .obj { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
-        .star-dot { width: 12px; height: 12px; background: #fff; border-radius: 50%; box-shadow: 0 0 15px #fff; }
+        .star-box { width: 15px; height: 15px; background: #fff; box-shadow: 0 0 15px #fff; border-radius: 2px; }
 
-        #aim-ui { position: absolute; width: 280px; height: 280px; border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; border: 2px solid gold; }
-        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); border-top: 1px solid rgba(255,255,255,0.3); }
-        .sector.highlight { background: rgba(255, 215, 0, 0.7); }
+        #aim-ui { position: absolute; width: 200px; height: 200px; border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; border: 3px dashed #f1c40f; }
+        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 80% 40%, 0 0); background: rgba(255,255,255,0.1); }
+        .sector.highlight { background: rgba(241, 196, 15, 0.8); }
     </style>
 </head>
 <body>
@@ -44,18 +54,16 @@
     <div id="aim-ui"></div>
 
     <div class="ui-panel">
-        <div class="btn" ontouchstart="initDrag(event, 'star', 1)">$1</div>
-        <div class="btn" ontouchstart="initDrag(event, 'star', 3)">$3</div>
-        <div id="comet-btn" class="btn" ontouchstart="initDrag(event, 'comet', 50)" onclick="confirmLaunch()">☄️</div>
+        <div class="btn" ontouchstart="initDrag(event, 'star')">$1</div>
+        <div id="comet-btn" class="btn" ontouchstart="initDrag(event, 'comet')" onclick="confirmLaunch()">☄️</div>
     </div>
 
     <script>
-        const { Engine, Runner, Bodies, Composite, Body, Events, Vector } = Matter;
+        const { Engine, Runner, Bodies, Composite, Body, Events } = Matter;
         const engine = Engine.create(); engine.gravity.y = 0;
         const view = document.getElementById('viewport');
         const runner = Runner.create(); Runner.run(runner, engine);
 
-        // Лимиты зума: от 0.1 до 0.7
         let scale = 0.5, offsetX = 0, offsetY = 0, lastDist = 0;
         let activeDrag = null, isPanning = false, lastX = 0, lastY = 0;
         let cometPending = null;
@@ -63,11 +71,12 @@
         const aimUI = document.getElementById('aim-ui');
         for(let i=0; i<16; i++) {
             let s = document.createElement('div'); s.className = 'sector';
-            s.style.transform = `rotate(${i * 22.5 - 11.25}deg)`; aimUI.appendChild(s);
+            s.style.transform = `rotate(${i * 22.5}deg)`; aimUI.appendChild(s);
         }
 
-        function initDrag(e, type, price) {
-            activeDrag = { type, price, x: e.touches[0].pageX, y: e.touches[0].pageY, active: false };
+        function initDrag(e, type) {
+            const t = e.touches[0];
+            activeDrag = { type, x: t.pageX, y: t.pageY, active: false };
         }
 
         window.addEventListener('touchstart', (e) => {
@@ -89,8 +98,8 @@
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                 const mid = { x: (e.touches[0].pageX + e.touches[1].pageX)/2, y: (e.touches[0].pageY + e.touches[1].pageY)/2 };
                 
-                // ОГРАНИЧЕНИЕ ЗУМА ДО 0.7
-                const nextScale = Math.min(Math.max(scale * (dist / lastDist), 0.1), 0.7);
+                // ТВОЁ ОГРАНИЧЕНИЕ ЗУМА (до 0.7)
+                const nextScale = Math.min(Math.max(scale * (dist / lastDist), 0.05), 0.7);
                 
                 offsetX -= (mid.x - offsetX) * (nextScale / scale - 1);
                 offsetY -= (mid.y - offsetY) * (nextScale / scale - 1);
@@ -114,12 +123,12 @@
                 if (activeDrag.type === 'star') placeStar(wx, wy);
                 else prepareComet(wx, wy);
             }
-            activeDrag = null; isPanning = false; lastDist = 0;
+            activeDrag = null; isPanning = false;
         });
 
         function placeStar(x, y) {
-            const b = Bodies.circle(x, y, 20, { isStatic: true });
-            const v = document.createElement('div'); v.className = 'obj star-dot';
+            const b = Bodies.rectangle(x, y, 30, 30, { isStatic: true });
+            const v = document.createElement('div'); v.className = 'obj star-box';
             b.visual = v; view.appendChild(v); Composite.add(engine.world, b);
         }
 
@@ -132,14 +141,16 @@
 
         function confirmLaunch() {
             if (!cometPending) return;
-            // Увеличил физическое тело для лучшего обнаружения
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 40, { frictionAir: 0 });
+            // Увеличено тело, чтобы комета не пролетала сквозь объекты
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 50, { frictionAir: 0, friction: 0, restitution: 1 });
             b.isComet = true;
-            const v = document.createElement('div'); v.className = 'comet-entity';
-            v.innerHTML = `<div class="comet-tail-v"></div><div class="comet-head-v"></div>`;
+            const v = document.createElement('div'); 
+            v.className = 'comet-super-visible'; // ОДИН КЛАСС ДЛЯ ВСЕГО
             b.visual = v;
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 0.15, y: Math.sin(cometPending.angle) * 0.15 });
+            view.appendChild(v); // Добавляем в Viewport
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 15, y: Math.sin(cometPending.angle) * 15 });
             Composite.add(engine.world, b);
+            
             aimUI.style.display = 'none';
             document.getElementById('comet-btn').classList.remove('active-launch');
             cometPending = null;
@@ -153,9 +164,11 @@
         Events.on(engine, 'afterUpdate', () => {
             Composite.allBodies(engine.world).forEach(b => {
                 if (b.visual) {
-                    b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
+                    b.visual.style.left = b.position.x + 'px'; 
+                    b.visual.style.top = b.position.y + 'px';
                     if(b.isComet) {
                         const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
+                        // Трансформация только для вращения, размер фиксирован в CSS
                         b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
                     }
                 }
@@ -169,7 +182,7 @@
                 aimUI.style.top = (cometPending.wy * scale + offsetY) + 'px';
             }
         }
-        window.Telegram.WebApp.ready();
     </script>
 </body>
 </html>
+
