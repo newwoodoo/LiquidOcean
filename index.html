@@ -6,121 +6,149 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; background: #02040a; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
-        #space { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
+        /* Контейнер для масштабирования */
+        #universe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-origin: center; transition: transform 0.1s ease-out; }
         
-        /* Кнопки выбора типа объекта */
-        .shop { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: center; gap: 10px; z-index: 1000; }
-        .item { 
-            width: 50px; height: 50px; border-radius: 12px; background: rgba(255,255,255,0.05); 
-            border: 1px solid rgba(255,255,255,0.2); color: white; display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; font-size: 10px; cursor: pointer;
+        /* Интерфейс */
+        .ui-panel { position: absolute; z-index: 1000; width: 100%; pointer-events: none; }
+        .top { top: 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .bottom { bottom: 30px; display: flex; justify-content: center; gap: 8px; }
+        
+        .btn { 
+            pointer-events: auto; padding: 10px; border-radius: 12px; 
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+            color: white; font-size: 11px; cursor: pointer; text-align: center; min-width: 50px;
         }
-        .item.active { border-color: #f1c40f; background: rgba(241,196,15,0.1); }
+        .btn.active { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; background: rgba(241,196,15,0.2); }
+        
+        .zoom-container { pointer-events: auto; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 20px; display: flex; align-items: center; gap: 10px; }
+        input[type=range] { width: 150px; accent-color: #f1c40f; }
 
-        /* Стиль звезды */
-        .star-glow {
-            position: absolute; border-radius: 50%; pointer-events: none;
-            box-shadow: 0 0 15px 2px white;
-            animation: twinkle 3s infinite ease-in-out;
+        /* Эффект звезды */
+        .star-visual {
+            position: absolute; border-radius: 50%; background: #fff;
+            box-shadow: 0 0 15px 4px rgba(255,255,255,0.8), 0 0 30px 8px rgba(255,255,255,0.4);
+            pointer-events: none; transform: translate(-50%, -50%);
         }
-        @keyframes twinkle { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
-
-        .ui-top { position: absolute; top: 50px; left: 20px; right: 20px; display: flex; justify-content: space-between; z-index: 1000; }
-        .comet-count { color: #f1c40f; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; border: 1px solid #f1c40f; }
+        /* Эффект кометы */
+        .comet-visual {
+            position: absolute; width: 4px; height: 4px; background: #fff; border-radius: 50%;
+            box-shadow: 0 0 10px 2px #f1c40f; pointer-events: none; transform: translate(-50%, -50%);
+        }
     </style>
 </head>
 <body>
-    <div id="space" onclick="handleClick(event)"></div>
-    
-    <div class="ui-top">
-        <div class="comet-count" id="c-count">КОМЕТЫ: 0</div>
-        <button onclick="toggleFilter()" style="background:none; border:1px solid white; color:white; border-radius:15px; padding:5px 10px;">МОИ / ВСЕ</button>
+    <div id="universe"></div>
+
+    <div class="ui-panel top">
+        <div class="zoom-container">
+            <span>zoom</span>
+            <input type="range" min="0.1" max="20" step="0.1" value="1" oninput="changeZoom(this.value)">
+            <span id="zoom-val">1x</span>
+        </div>
+        <button class="btn" style="width:120px" onclick="toggleFilter()">ВСЕ / МОИ</button>
     </div>
 
-    <div class="shop">
-        <div class="item active" id="type-star" onclick="setType('star')">⭐<br>$1-25</div>
-        <div class="item" id="type-comet" onclick="setType('comet')">☄️<br>$50</div>
+    <div class="ui-panel bottom">
+        <div class="btn active" id="b1" onclick="setMode('star', 1, 'b1')">$1</div>
+        <div class="btn" id="b3" onclick="setMode('star', 3, 'b3')">$3</div>
+        <div class="btn" id="b10" onclick="setMode('star', 10, 'b10')">$10</div>
+        <div class="btn" id="b25" onclick="setMode('star', 25, 'b25')">$25</div>
+        <div class="btn" id="bc" onclick="setMode('comet', 50, 'bc')">☄️ $50</div>
     </div>
 
     <script>
-        const { Engine, Render, Runner, Bodies, Composite, Body, Events } = Matter;
+        const { Engine, Runner, Bodies, Composite, Body, Events } = Matter;
         const engine = Engine.create(); engine.gravity.y = 0;
-        const W = window.innerWidth, H = window.innerHeight;
+        const universe = document.getElementById('universe');
         const runner = Runner.create();
         Runner.run(runner, engine);
 
-        let currentType = 'star';
-        let cometInventory = 0;
-        let myStars = [];
+        let mode = 'star';
+        let currentPrice = 1;
+        let zoom = 1;
 
-        function setType(t) {
-            currentType = t;
-            document.getElementById('type-star').classList.toggle('active', t === 'star');
-            document.getElementById('type-comet').classList.toggle('active', t === 'comet');
+        function setMode(m, p, id) {
+            mode = m; currentPrice = p;
+            document.querySelectorAll('.bottom .btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
         }
 
-        function handleClick(e) {
-            const x = e.clientX;
-            const y = e.clientY;
+        function changeZoom(v) {
+            zoom = v;
+            universe.style.transform = `scale(${v})`;
+            document.getElementById('zoom-val').innerText = v + 'x';
+        }
 
-            if (currentType === 'star') {
-                createStar(x, y);
-            } else if (currentType === 'comet') {
-                // Если кликнули "Кометой", мы либо покупаем её, либо запускаем
-                cometInventory++;
-                updateUI();
-                startComet(x, y);
+        window.addEventListener('click', (e) => {
+            if (e.target.closest('.ui-panel')) return;
+
+            // Вычисляем координаты с учетом зума
+            const rect = universe.getBoundingClientRect();
+            const x = (e.clientX - window.innerWidth/2) / zoom + window.innerWidth/2;
+            const y = (e.clientY - window.innerHeight/2) / zoom + window.innerHeight/2;
+
+            if (mode === 'star') createStar(x, y, currentPrice);
+            else createComet(x, y);
+        });
+
+        function createStar(x, y, price) {
+            const size = price === 25 ? 6 : (price === 10 ? 4 : 2);
+            const starBody = Bodies.circle(x, y, size, { isStatic: true });
+            
+            const visual = document.createElement('div');
+            visual.className = 'star-visual';
+            visual.style.width = size + 'px'; visual.style.height = size + 'px';
+            visual.style.left = x + 'px'; visual.style.top = y + 'px';
+            
+            if (price >= 10) {
+                const name = prompt("Имя звезды:", "Звезда");
+                if (name) {
+                    const label = document.createElement('div');
+                    label.style.position = 'absolute'; label.style.top = '-20px';
+                    label.style.fontSize = '12px'; label.innerText = name;
+                    visual.appendChild(label);
+                }
+            }
+
+            universe.appendChild(visual);
+            Composite.add(engine.world, starBody);
+            haptic('light');
+        }
+
+        function createComet(x, y) {
+            const cometBody = Bodies.circle(x, y, 3, { frictionAir: 0 });
+            const visual = document.createElement('div');
+            visual.className = 'comet-visual';
+            visual.style.left = x + 'px'; visual.style.top = y + 'px';
+            universe.appendChild(visual);
+            
+            // Задаем ОЧЕНЬ медленную скорость (пролетит экран за долгое время)
+            Body.setVelocity(cometBody, { x: 0.02, y: -0.01 });
+            
+            cometBody.visual = visual;
+            Composite.add(engine.world, cometBody);
+            haptic('heavy');
+        }
+
+        Events.on(engine, 'afterUpdate', () => {
+            Composite.allBodies(engine.world).forEach(body => {
+                if (body.visual) {
+                    body.visual.style.left = body.position.x + 'px';
+                    body.visual.style.top = body.position.y + 'px';
+                }
+            });
+        });
+
+        function haptic(style) {
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                if (style === 'light') Telegram.WebApp.HapticFeedback.impactOccurred('light');
+                else Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
         }
 
-        function createStar(x, y) {
-            const star = Bodies.circle(x, y, 4, {
-                isStatic: true, // Звезды стоят на месте
-                render: { fillStyle: '#ffffff', shadowBlur: 20, shadowColor: '#ffffff' }
-            });
-            
-            // Визуальный эффект сияния (DOM элемент поверх физики)
-            const glow = document.createElement('div');
-            glow.className = 'star-glow';
-            glow.style.left = (x - 4) + 'px';
-            glow.style.top = (y - 4) + 'px';
-            glow.style.width = '8px';
-            glow.style.height = '8px';
-            document.getElementById('space').appendChild(glow);
-            
-            Composite.add(engine.world, star);
-            if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred('light');
-        }
-
-        function startComet(x, y) {
-            // Комета создается с ОЧЕНЬ маленькой скоростью
-            const comet = Bodies.circle(x, y, 3, {
-                frictionAir: 0,
-                render: { fillStyle: '#fff', shadowBlur: 25, shadowColor: '#f1c40f' }
-            });
-            
-            // Направление: летит медленно вправо-вверх (можно менять)
-            Body.setVelocity(comet, { x: 0.05, y: -0.02 }); 
-            Composite.add(engine.world, comet);
-            
-            // Хвост кометы (простой визуальный эффект)
-            const tail = document.createElement('div');
-            tail.style.position = 'absolute';
-            tail.style.width = '2px'; tail.style.height = '100px';
-            tail.style.background = 'linear-gradient(to bottom, transparent, rgba(241,196,15,0.4))';
-            // В реальном времени хвост нужно обновлять, здесь упростим для стабильности кода
-        }
-
-        function updateUI() {
-            document.getElementById('c-count').innerText = `КОМЕТЫ: ${cometInventory}`;
-        }
-
-        function toggleFilter() {
-            // Логика фильтрации будет здесь (нужен сервер для других пользователей)
-            alert("Сейчас показаны только ваши объекты.");
-        }
-
+        function toggleFilter() { alert("Функция будет доступна в общей сети."); }
         window.Telegram.WebApp.ready();
     </script>
 </body>
