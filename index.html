@@ -6,33 +6,33 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; background: #010208; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        body { margin: 0; background: #01020a; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        .bottom-bar { position: absolute; bottom: 0; width: 100%; height: 90px; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; gap: 8px; pointer-events: auto; z-index: 2000; }
+        .bottom-bar { position: absolute; bottom: 0; width: 100%; height: 90px; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; gap: 8px; pointer-events: auto; z-index: 2000; }
         .btn { width: 45px; height: 45px; border-radius: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 10px; display: flex; align-items: center; justify-content: center; }
-        .btn.active-launch { background: #f1c40f; color: #000; box-shadow: 0 0 20px #f1c40f; animation: pulse 0.8s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .btn.active-launch { background: #f1c40f; color: #000; box-shadow: 0 0 30px #f1c40f; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { scale: 1; } 50% { scale: 1.1; } 100% { scale: 1; } }
 
-        /* Сектора прицела */
-        #aim-ui { position: absolute; width: 220px; height: 220px; border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 500; }
-        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); border-top: 1px solid rgba(255,255,255,0.15); }
-        .sector.highlight { background: rgba(241,196,15,0.6); border-top: 2px solid #f1c40f; box-shadow: 0 0 15px #f1c40f; }
+        /* Прицел */
+        #aim-ui { position: absolute; width: 240px; height: 240px; border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 500; }
+        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); border-top: 1px solid rgba(255,255,255,0.1); }
+        .sector.highlight { background: radial-gradient(circle at 0 0, rgba(241,196,15,0.7) 0%, transparent 70%); border-top: 2px solid #f1c40f; }
 
-        /* ГРАФИКА ОБЪЕКТОВ */
+        /* ГРАФИКА */
         .obj { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
         
         /* Комета */
-        .comet-visual { width: 30px; height: 20px; position: relative; }
-        .comet-body { width: 100%; height: 100%; background: #666; border-radius: 40% 60% 40% 50%; box-shadow: inset -5px -5px 10px #000, 0 0 15px orange; position: relative; z-index: 5; }
-        .comet-fire { position: absolute; width: 50px; height: 150px; background: linear-gradient(to bottom, #ffae00, #ff4d00, transparent); filter: blur(8px); top: 10px; left: -10px; transform-origin: top center; opacity: 0.8; }
-        .comet-core { position: absolute; width: 10px; height: 10px; background: #fff; border-radius: 50%; top: 5px; left: 10px; box-shadow: 0 0 20px #fff; z-index: 6; }
+        .comet-wrap { width: 40px; height: 30px; position: relative; }
+        .comet-body { width: 100%; height: 100%; background: radial-gradient(circle at 30% 30%, #888, #222); border-radius: 45% 55% 35% 65%; box-shadow: 0 0 20px orange; position: relative; z-index: 10; }
+        .comet-tail { position: absolute; width: 60px; height: 180px; background: linear-gradient(to bottom, rgba(255,165,0,0.8), rgba(255,69,0,0.4), transparent); filter: blur(10px); top: 15px; left: -10px; transform-origin: top center; }
 
-        /* Звезда $3 с лучами */
-        .star-3-ray { position: absolute; top: 50%; left: 50%; height: 1px; width: 20px; transform-origin: left center; animation: colorShift 3s infinite linear; }
-        @keyframes colorShift { 0% { background: red; } 25% { background: lime; } 50% { background: blue; } 75% { background: yellow; } 100% { background: red; } }
-
-        .explosion-p { position: absolute; width: 4px; height: 4px; background: #fff; border-radius: 50%; box-shadow: 0 0 10px #fff; }
+        /* Звезды */
+        .nebula { position: absolute; width: 60px; height: 60px; background: radial-gradient(circle, rgba(0,150,255,0.2), transparent 70%); transform: translate(-50%, -50%); animation: pulseNebula 4s infinite alternate; }
+        .ring { position: absolute; width: 40px; height: 10px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%) rotateX(70deg); animation: rotateRing 10s infinite linear; }
+        
+        @keyframes rotateRing { from { transform: translate(-50%, -50%) rotateX(70deg) rotateZ(0deg); } to { transform: translate(-50%, -50%) rotateX(70deg) rotateZ(360deg); } }
+        @keyframes pulseNebula { from { scale: 0.8; opacity: 0.2; } to { scale: 1.3; opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -58,7 +58,6 @@
         let activeDrag = null, isPanning = false, lastX = 0, lastY = 0;
         let cometPending = null;
 
-        // Создаем сектора
         for(let i=0; i<16; i++) {
             let s = document.createElement('div'); s.className = 'sector';
             s.style.transform = `rotate(${i * 22.5 - 11.25}deg)`;
@@ -102,8 +101,8 @@
             if (cometPending) {
                 const dx = e.touches[0].pageX - (cometPending.wx * scale + offsetX);
                 const dy = e.touches[0].pageY - (cometPending.wy * scale + offsetY);
-                cometPending.angle = Math.round(Math.atan2(dy, dx) / (Math.PI/8)) * (Math.PI/8);
-                updateSectors(cometPending.angle);
+                const newAngle = Math.round(Math.atan2(dy, dx) / (Math.PI/8)) * (Math.PI/8);
+                if (newAngle !== cometPending.angle) { cometPending.angle = newAngle; updateSectors(newAngle); haptic('light'); }
             }
         });
 
@@ -118,17 +117,21 @@
         });
 
         function placeStar(x, y, p) {
-            const b = Bodies.circle(x, y, 12, { isStatic: true, isSensor: true });
+            const b = Bodies.circle(x, y, 15, { isStatic: true, isSensor: true });
             b.price = p;
             const v = document.createElement('div'); v.className = 'obj';
+            
+            if (p === 10) { v.innerHTML += `<div class="nebula"></div>`; }
+            if (p === 25) { v.innerHTML += `<div class="ring"></div>`; }
             if (p === 3) {
                 for(let i=0; i<6; i++) {
-                    let r = document.createElement('div'); r.className = 'star-3-ray';
-                    r.style.transform = `rotate(${i*60}deg)`; v.appendChild(r);
+                    let r = document.createElement('div');
+                    r.style.cssText = `position:absolute;height:1px;width:25px;background:white;transform:rotate(${i*60}deg);transform-origin:left;`;
+                    v.appendChild(r);
                 }
             }
-            const s = p === 25 ? 14 : (p === 10 ? 8 : 5);
-            v.innerHTML += `<div style="width:${s}px;height:${s}px;background:#fff;border-radius:50%;box-shadow:0 0 ${s*4}px #fff;"></div>`;
+            const s = p === 25 ? 16 : (p === 10 ? 10 : 5);
+            v.innerHTML += `<div style="width:${s}px;height:${s}px;background:#fff;border-radius:50%;box-shadow:0 0 ${s*5}px #fff;z-index:20;"></div>`;
             b.visual = v; view.appendChild(v); Composite.add(engine.world, b);
         }
 
@@ -141,16 +144,16 @@
 
         function confirmComet() {
             if (!cometPending) return;
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 15, { frictionAir: 0 });
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 18, { frictionAir: 0 });
             b.isComet = true;
             const v = document.createElement('div'); v.className = 'obj';
-            v.innerHTML = `<div class="comet-visual"><div class="comet-fire"></div><div class="comet-body"></div><div class="comet-core"></div></div>`;
+            v.innerHTML = `<div class="comet-wrap"><div class="comet-tail"></div><div class="comet-body"></div></div>`;
             b.visual = v;
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 0.07, y: Math.sin(cometPending.angle) * 0.07 });
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 0.08, y: Math.sin(cometPending.angle) * 0.08 });
             Composite.add(engine.world, b);
             document.getElementById('aim-ui').style.display = 'none';
             document.getElementById('comet-btn').classList.remove('active-launch');
-            cometPending = null;
+            cometPending = null; haptic('heavy');
         }
 
         function updateSectors(angle) {
@@ -165,26 +168,11 @@
                     b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
                     if(b.isComet) {
                         const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
-                        b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad) scale(${Math.max(1, scale/4)})`;
-                        bodies.forEach(s => {
-                            if(!s.isComet && s.price <= 3 && Vector.magnitude(Vector.sub(b.position, s.position)) < 30) {
-                                createExp(s.position.x, s.position.y); Composite.remove(engine.world, s); s.visual.remove();
-                            }
-                        });
+                        b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad) scale(${Math.max(1, scale/3)})`;
                     }
                 }
             });
         });
-
-        function createExp(x, y) {
-            for(let i=0; i<15; i++) {
-                const p = document.createElement('div'); p.className = 'explosion-p';
-                p.style.left = x+'px'; p.style.top = y+'px'; view.appendChild(p);
-                const a = Math.random()*Math.PI*2; const d = 40+Math.random()*40;
-                p.animate([{transform:'scale(1)', opacity:1}, {transform:`translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px) scale(0)`, opacity:0}], 1000);
-                setTimeout(() => p.remove(), 1000);
-            }
-        }
 
         function updateTransform() {
             view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
