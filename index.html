@@ -6,58 +6,64 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        body { margin: 0; background: #010205; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
         .ui { position: absolute; z-index: 1000; width: 100%; pointer-events: none; }
-        .bottom { bottom: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px; }
-        .top-info { top: 40px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; }
-
+        .bottom { bottom: 20px; display: flex; justify-content: center; gap: 5px; padding: 0 10px; }
+        
         .btn { 
-            pointer-events: auto; width: 50px; height: 50px; border-radius: 12px; 
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
-            color: white; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            pointer-events: auto; width: 42px; height: 42px; border-radius: 10px; 
+            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.2);
+            color: white; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
-        .btn.active { border-color: #f1c40f; background: rgba(241,196,15,0.1); }
-        .btn.empty { opacity: 0.3; border-style: dashed; }
+        .btn.active { border-color: #f1c40f; background: rgba(241,196,15,0.15); box-shadow: 0 0 10px rgba(241,196,15,0.3); }
+        .btn.empty { opacity: 0.2; border-style: dashed; }
 
-        /* Эффект звезды за $3 */
-        .star-3 {
-            position: absolute; width: 4px; height: 4px; background: #fff; border-radius: 50%;
-            box-shadow: 0 0 10px #fff;
-        }
-        .ray {
-            position: absolute; top: 50%; left: 50%; height: 1px; background: white;
-            transform-origin: left center; opacity: 0.6;
-            animation: colorShift 4s infinite linear;
-        }
-        @keyframes colorShift {
-            0% { background: #ff4d4d; width: 8px; }
-            25% { background: #4dff4d; width: 12px; }
-            50% { background: #4d4dff; width: 8px; }
-            75% { background: #ffff4d; width: 12px; }
-            100% { background: #ff4d4d; width: 8px; }
+        .mode-toggle { 
+            position: absolute; top: 40px; right: 20px; pointer-events: auto;
+            background: rgba(255,255,255,0.1); border: 1px solid #fff; color: #fff;
+            padding: 10px; border-radius: 50%; width: 50px; height: 50px; font-size: 20px;
         }
 
-        /* Хвост кометы */
+        /* Прицел кометы */
+        #aim-circle {
+            position: absolute; width: 100px; height: 100px; border: 1px dashed rgba(241,196,15,0.5);
+            border-radius: 50%; display: none; pointer-events: none; z-index: 2000;
+        }
+        #aim-line {
+            position: absolute; height: 2px; background: #f1c40f; transform-origin: left center; width: 0;
+        }
+
+        /* Реалистичная звезда за $3 */
+        .star-3-container { position: absolute; transform: translate(-50%, -50%); }
+        .star-core { width: 4px; height: 4px; background: #fff; border-radius: 50%; box-shadow: 0 0 10px #fff; }
+        .star-rays {
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+            filter: blur(2px); transform: translate(-50%, -50%); animation: pulse 4s infinite alternate;
+        }
+        @keyframes pulse { 0% { opacity: 0.4; scale: 0.8; } 100% { opacity: 0.9; scale: 1.2; } }
+
         .comet-tail {
-            position: absolute; width: 2px; height: 40px;
-            background: linear-gradient(to top, rgba(241,196,15,0.6), transparent);
-            transform-origin: top center; pointer-events: none;
+            position: absolute; width: 1px; height: 60px;
+            background: linear-gradient(to top, rgba(241,196,15,0.7), transparent);
+            transform-origin: top center;
         }
     </style>
 </head>
 <body>
     <div id="viewport"></div>
+    <div id="aim-circle"><div id="aim-line"></div></div>
 
-    <div class="ui top-info" id="debug">Используй два пальца для Zoom и перемещения</div>
+    <button class="mode-toggle" id="m-toggle" onclick="toggleEditMode()">✋</button>
 
     <div class="ui bottom">
         <div class="btn active" id="b1" onclick="setMode('star', 1, 'b1')">$1</div>
         <div class="btn" id="b3" onclick="setMode('star', 3, 'b3')">$3</div>
         <div class="btn" id="b10" onclick="setMode('star', 10, 'b10')">$10</div>
         <div class="btn" id="b25" onclick="setMode('star', 25, 'b25')">$25</div>
-        <div class="btn" id="bc" onclick="setMode('comet', 50, 'bc')">☄️$50</div>
+        <div class="btn" id="bc" onclick="setMode('comet', 50, 'bc')">☄️</div>
         <div class="btn empty">?</div>
         <div class="btn empty">?</div>
         <div class="btn empty">?</div>
@@ -67,12 +73,15 @@
         const { Engine, Runner, Bodies, Composite, Body, Events } = Matter;
         const engine = Engine.create(); engine.gravity.y = 0;
         const view = document.getElementById('viewport');
+        const aim = document.getElementById('aim-circle');
+        const aimLine = document.getElementById('aim-line');
         const runner = Runner.create();
         Runner.run(runner, engine);
 
-        let mode = 'star', price = 1;
+        let mode = 'star', price = 1, isEditMode = false;
         let scale = 1, offsetX = 0, offsetY = 0;
         let lastPinchDist = 0, isDragging = false, lastX = 0, lastY = 0;
+        let aimStart = null;
 
         function setMode(m, p, id) {
             mode = m; price = p;
@@ -80,87 +89,96 @@
             document.getElementById(id).classList.add('active');
         }
 
-        // Рендеринг объектов
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            document.getElementById('m-toggle').innerText = isEditMode ? "➕" : "✋";
+        }
+
         function createStar(x, y, p) {
-            const visual = document.createElement('div');
-            visual.style.position = 'absolute';
-            visual.style.left = x + 'px'; visual.style.top = y + 'px';
+            const container = document.createElement('div');
+            container.className = 'star-3-container';
+            container.style.left = x + 'px'; container.style.top = y + 'px';
             
             if (p === 3) {
-                visual.className = 'star-3';
-                for(let i=0; i<5; i++) {
-                    const ray = document.createElement('div');
-                    ray.className = 'ray';
-                    ray.style.transform = `rotate(${i * 72}deg)`;
-                    visual.appendChild(ray);
-                }
+                container.innerHTML = '<div class="star-rays"></div><div class="star-core"></div>';
             } else {
-                const s = p === 25 ? 6 : (p === 10 ? 4 : 2);
-                visual.style.width = s+'px'; visual.style.height = s+'px';
-                visual.style.background = '#fff'; visual.style.borderRadius = '50%';
-                visual.style.boxShadow = `0 0 ${s*3}px #fff`;
+                const s = p === 25 ? 8 : (p === 10 ? 5 : 3);
+                container.innerHTML = `<div style="width:${s}px;height:${s}px;background:#fff;border-radius:50%;box-shadow:0 0 ${s*4}px rgba(255,255,255,0.8)"></div>`;
             }
-            view.appendChild(visual);
+            view.appendChild(container);
             haptic('light');
         }
 
-        function createComet(x, y) {
+        function launchComet(x, y, vx, vy) {
             const body = Bodies.circle(x, y, 3, { frictionAir: 0 });
             const visual = document.createElement('div');
             visual.style.position = 'absolute';
-            visual.innerHTML = '<div style="width:6px;height:6px;background:#fff;border-radius:50%;box-shadow:0 0 10px orange;"></div>';
-            const tail = document.createElement('div');
-            tail.className = 'comet-tail';
-            visual.appendChild(tail);
-            
+            visual.innerHTML = '<div style="width:5px;height:5px;background:#fff;border-radius:50%;box-shadow:0 0 15px orange;"></div><div class="comet-tail"></div>';
             view.appendChild(visual);
-            Body.setVelocity(body, { x: 0.05, y: -0.02 });
+            Body.setVelocity(body, { x: vx * 0.01, y: vy * 0.01 });
             body.visual = visual;
             Composite.add(engine.world, body);
             haptic('heavy');
         }
 
-        // Управление (Zoom & Pan)
         window.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2) {
-                lastPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-            } else if (e.touches.length === 1) {
-                isDragging = true;
-                lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
+            if (!isEditMode) {
+                if (e.touches.length === 2) {
+                    lastPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                } else {
+                    isDragging = true;
+                    lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
+                }
+            } else if (mode === 'comet') {
+                aimStart = { x: e.touches[0].pageX, y: e.touches[0].pageY };
+                aim.style.display = 'block';
+                aim.style.left = (aimStart.x - 50) + 'px'; aim.style.top = (aimStart.y - 50) + 'px';
             }
         });
 
         window.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2) {
-                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                const delta = dist / lastPinchDist;
-                scale = Math.min(Math.max(scale * delta, 0.2), 20);
-                lastPinchDist = dist;
-                updateTransform();
-            } else if (isDragging) {
-                offsetX += e.touches[0].pageX - lastX;
-                offsetY += e.touches[0].pageY - lastY;
-                lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
-                updateTransform();
+            if (!isEditMode) {
+                if (e.touches.length === 2) {
+                    const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    scale = Math.min(Math.max(scale * (dist / lastPinchDist), 0.1), 20);
+                    lastPinchDist = dist;
+                    updateTransform();
+                } else if (isDragging) {
+                    offsetX += e.touches[0].pageX - lastX;
+                    offsetY += e.touches[0].pageY - lastY;
+                    lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
+                    updateTransform();
+                }
+            } else if (aimStart && mode === 'comet') {
+                const dx = e.touches[0].pageX - aimStart.x;
+                const dy = e.touches[0].pageY - aimStart.y;
+                const angle = Math.atan2(dy, dx);
+                const dist = Math.min(Math.hypot(dx, dy), 50);
+                aimLine.style.width = dist + 'px';
+                aimLine.style.left = '50%'; aimLine.style.top = '50%';
+                aimLine.style.transform = `rotate(${angle}rad)`;
             }
         });
 
         window.addEventListener('touchend', (e) => {
-            if (e.touches.length === 0) {
-                isDragging = false;
-                // Клик для создания объекта (если не было сильного сдвига)
-                if (Math.abs(e.changedTouches[0].pageX - lastX) < 5) {
-                    const worldX = (e.changedTouches[0].pageX - offsetX) / scale;
-                    const worldY = (e.changedTouches[0].pageY - offsetY) / scale;
-                    if (mode === 'star') createStar(worldX, worldY, price);
-                    else createComet(worldX, worldY);
+            if (isEditMode) {
+                const worldX = (e.changedTouches[0].pageX - offsetX) / scale;
+                const worldY = (e.changedTouches[0].pageY - offsetY) / scale;
+
+                if (mode === 'comet' && aimStart) {
+                    const vx = (e.changedTouches[0].pageX - aimStart.x) * 0.1;
+                    const vy = (e.changedTouches[0].pageY - aimStart.y) * 0.1;
+                    launchComet(worldX, worldY, vx, vy);
+                    aim.style.display = 'none'; aimLine.style.width = '0';
+                    aimStart = null;
+                } else if (mode === 'star') {
+                    createStar(worldX, worldY, price);
                 }
             }
+            isDragging = false;
         });
 
-        function updateTransform() {
-            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-        }
+        function updateTransform() { view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`; }
 
         Events.on(engine, 'afterUpdate', () => {
             Composite.allBodies(engine.world).forEach(b => {
@@ -168,7 +186,7 @@
                     b.visual.style.left = b.position.x + 'px';
                     b.visual.style.top = b.position.y + 'px';
                     const angle = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
-                    b.visual.style.transform = `rotate(${angle}deg)`;
+                    b.visual.style.transform = `rotate(${angle}rad)`;
                 }
             });
         });
