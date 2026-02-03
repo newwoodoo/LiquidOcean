@@ -9,8 +9,11 @@
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        /* Навигация */
-        #minimap { position: absolute; top: 20px; left: 20px; width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #333; z-index: 11000; border-radius: 4px; }
+        /* Мини-карта и Шкала Зума */
+        #ui-container { position: absolute; top: 20px; left: 20px; z-index: 11000; pointer-events: none; }
+        #zoom-bar { width: 80px; height: 4px; background: rgba(255,255,255,0.1); margin-bottom: 5px; position: relative; overflow: hidden; border-radius: 2px; }
+        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; transform: translateX(-50%); width: 0%; transition: width 0.1s; }
+        #minimap { width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #333; position: relative; border-radius: 4px; }
         #minimap-point { position: absolute; width: 4px; height: 4px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); top: 50%; left: 50%; }
 
         .ui-panel { position: absolute; bottom: 0; width: 100%; height: 90px; background: #111; display: flex; justify-content: center; align-items: center; gap: 10px; z-index: 10000; border-top: 1px solid #333; }
@@ -18,27 +21,42 @@
 
         /* Объекты */
         .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
-        .glow { position: absolute; width: 150%; height: 150%; top: -25%; left: -25%; background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%); }
         
-        /* Звезда за 3$ - Лучи */
-        .ray { position: absolute; top: 50%; left: 50%; width: 2px; height: 40px; background: #fff; transform-origin: top center; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); animation: flicker 2s infinite alternate; }
-        @keyframes flicker { from { opacity: 0.3; filter: hue-rotate(0deg); } to { opacity: 0.8; filter: hue-rotate(360deg); } }
+        /* Исправленные Лучи для 3$ */
+        .ray-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
+        .ray { 
+            position: absolute; top: 50%; left: 50%; width: 2px; height: 50px; 
+            background: linear-gradient(to top, #fff, transparent); 
+            transform-origin: bottom center; 
+            animation: flicker 1.5s infinite alternate;
+        }
 
-        /* Пояса астероидов за 10$ */
-        .ring { position: absolute; top: 50%; left: 50%; border: 2px dotted; border-radius: 50%; transform: translate(-50%, -50%) rotateX(75deg); opacity: 0.6; }
+        /* Красивая комета */
+        .comet-v { position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; z-index: 9999; }
+        .comet-shield { /* Ореол спереди */
+            position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+            width: 40px; height: 20px; border-radius: 40px 40px 0 0;
+            background: radial-gradient(ellipse at bottom, rgba(255,255,255,0.5), transparent 70%);
+        }
+        .comet-tail { /* Градиентный хвост */
+            position: absolute; top: 10px; left: 50%; width: 60px; height: 180px;
+            background: ridge; /* Заглушка */
+            background: linear-gradient(to bottom, var(--c-color), transparent);
+            clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+            transform: translateX(-50%); opacity: 0.8;
+        }
 
-        /* Комета */
-        .comet-v { position: absolute; width: 25px; height: 25px; background: #fff; border-radius: 50%; box-shadow: 0 0 30px #fff, 0 0 50px orange; z-index: 9999; }
-        .comet-v::after { content: ''; position: absolute; top: 10px; left: 50%; width: 10px; height: 120px; background: linear-gradient(to bottom, orange, transparent); transform: translateX(-50%); }
-
-        /* Сектора прицела */
-        #aim-ui { position: absolute; width: 200px; height: 200px; border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; border: 1px solid rgba(255,255,255,0.1); }
-        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); border-top: 1px solid rgba(255,255,255,0.2); }
-        .sector.active { background: rgba(241,196,15,0.5); border-top: 2px solid #f1c40f; }
+        @keyframes flicker { from { opacity: 0.2; } to { opacity: 0.7; } }
+        .sector.active { background: rgba(241,196,15,0.4); border-top: 2px solid #f1c40f; }
+        #aim-ui { position: absolute; width: 180px; height: 180px; border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; }
+        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); }
     </style>
 </head>
 <body>
-    <div id="minimap"><div id="minimap-point"></div></div>
+    <div id="ui-container">
+        <div id="zoom-bar"><div id="zoom-indicator"></div></div>
+        <div id="minimap"><div id="minimap-point"></div></div>
+    </div>
     <div id="viewport"></div>
     <div id="aim-ui"></div>
 
@@ -56,13 +74,12 @@
         const runner = Runner.create(); Runner.run(runner, engine);
 
         let scale = 0.3, offsetX = window.innerWidth/2, offsetY = window.innerHeight/2;
-        let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0;
-        let cometPending = null;
+        let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0, cometPending = null;
 
-        const MIN_ZOOM = 0.05, MAX_ZOOM = 0.5; // Уменьшено на 30%
-        const ringColors = ['#00f', '#f00', '#0f0', '#ff0', '#f0f', '#0ff', '#fff', '#ffa500', '#8a2be2', '#7fff00'];
+        const MIN_ZOOM = 0.05, MAX_ZOOM = 0.5;
+        const cometColors = ['#ff4500', '#00d4ff', '#2ecc71', '#9b59b6']; // 4 вида
 
-        // Сектора
+        // Создание секторов
         const aimUI = document.getElementById('aim-ui');
         for(let i=0; i<16; i++) {
             let s = document.createElement('div'); s.className = 'sector';
@@ -118,18 +135,17 @@
             v.style.width = size + 'px'; v.style.height = size + 'px';
             v.style.background = '#fff'; v.style.boxShadow = `0 0 20px #fff`;
             
-            if (p === 3) { // Лучики для 3$
-                for(let i=0; i<6; i++) {
+            if (p === 3) {
+                const container = document.createElement('div'); container.className = 'ray-container';
+                for(let i=0; i<8; i++) {
                     let r = document.createElement('div'); r.className = 'ray';
-                    r.style.transform = `translate(-50%, -100%) rotate(${i*60}deg)`;
-                    v.appendChild(r);
+                    r.style.transform = `translate(-50%, -100%) rotate(${i*45}deg)`;
+                    container.appendChild(r);
                 }
+                v.appendChild(container);
             }
-            if (p === 10) { // Пояс астероидов для 10$
-                let color = ringColors[Math.floor(Math.random()*10)];
-                let r = document.createElement('div'); r.className = 'ring';
-                r.style.width = (size * 2.5) + 'px'; r.style.height = (size * 2.5) + 'px';
-                r.style.borderColor = color; r.style.boxShadow = `0 0 10px ${color}`;
+            if (p === 10) {
+                let r = document.createElement('div'); r.style.cssText = `position:absolute;top:50%;left:50%;width:${size*2.5}px;height:${size*2.5}px;border:1px solid rgba(255,255,255,0.3);border-radius:50%;transform:translate(-50%,-50%) rotateX(70deg);`;
                 v.appendChild(r);
             }
             b.visual = v; view.appendChild(v); Composite.add(engine.world, b);
@@ -138,27 +154,35 @@
         function prepareComet(x, y) {
             cometPending = { wx: x, wy: y, angle: 0 };
             aimUI.style.display = 'block';
-            document.getElementById('comet-btn').classList.add('active-launch');
             updateTransform();
         }
 
         function confirmLaunch() {
             if (!cometPending) return;
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 12, { frictionAir: 0 });
+            const color = cometColors[Math.floor(Math.random()*4)];
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 10, { frictionAir: 0, restitution: 1 });
             b.isComet = true;
             const v = document.createElement('div'); v.className = 'comet-v';
+            v.style.boxShadow = `0 0 20px #fff, 0 0 40px ${color}`;
+            v.innerHTML = `<div class="comet-shield"></div><div class="comet-tail" style="--c-color:${color}"></div>`;
             b.visual = v; view.appendChild(v);
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 0.2, y: Math.sin(cometPending.angle) * 0.2 });
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 0.4, y: Math.sin(cometPending.angle) * 0.4 });
             Composite.add(engine.world, b);
             aimUI.style.display = 'none';
-            document.getElementById('comet-btn').classList.remove('active-launch');
             cometPending = null;
         }
 
-        function updateSectors(angle) {
-            const index = (Math.round((angle * 180 / Math.PI) / 22.5) + 16) % 16;
-            document.querySelectorAll('.sector').forEach((s, i) => s.classList.toggle('active', i === index));
-        }
+        // Обработка столкновений комет
+        Events.on(engine, 'collisionStart', (e) => {
+            e.pairs.forEach(pair => {
+                if (pair.bodyA.isComet && pair.bodyB.isComet) {
+                    [pair.bodyA, pair.bodyB].forEach(b => {
+                        if (b.visual) b.visual.remove();
+                        Composite.remove(engine.world, b);
+                    });
+                }
+            });
+        });
 
         Events.on(engine, 'afterUpdate', () => {
             Composite.allBodies(engine.world).forEach(b => {
@@ -172,15 +196,25 @@
             });
         });
 
+        function updateSectors(angle) {
+            const index = (Math.round((angle * 180 / Math.PI) / 22.5) + 16) % 16;
+            document.querySelectorAll('.sector').forEach((s, i) => s.classList.toggle('active', i === index));
+        }
+
         function updateTransform() {
             view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
             if(cometPending) {
                 aimUI.style.left = (cometPending.wx * scale + offsetX) + 'px';
                 aimUI.style.top = (cometPending.wy * scale + offsetY) + 'px';
             }
+            // Обновление мини-карты
             const point = document.getElementById('minimap-point');
             point.style.left = (50 - (offsetX / 25)) + '%';
             point.style.top = (50 - (offsetY / 25)) + '%';
+            
+            // Обновление шкалы Зума (от 0% до 100%)
+            const zoomPercent = ((scale - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
+            document.getElementById('zoom-indicator').style.width = zoomPercent + '%';
         }
 
         updateTransform();
