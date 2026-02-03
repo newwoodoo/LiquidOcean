@@ -9,7 +9,6 @@
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; color: white; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        /* Мини-карта и Шкала Зума */
         #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; pointer-events: none; }
         #zoom-bar { width: 80px; height: 4px; background: rgba(255,255,255,0.1); margin-bottom: 5px; border-radius: 2px; position: relative; }
         #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; transform: translateX(-50%); width: 0%; transition: width 0.1s; }
@@ -20,10 +19,8 @@
         .btn { width: 50px; height: 50px; border-radius: 12px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
         .btn.active-launch { background: #f1c40f; color: #000; border-color: #fff; }
 
-        /* Объекты */
         .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
         
-        /* Лучи звезды $3 */
         .ray { 
             position: absolute; top: 50%; left: 50%; width: 2px; height: 45px; 
             background: linear-gradient(to top, #fff, transparent); 
@@ -32,7 +29,6 @@
         }
         @keyframes rayFlicker { 0% { opacity: 0.2; transform: translate(-50%, -100%) scaleY(0.8); } 100% { opacity: 0.7; transform: translate(-50%, -100%) scaleY(1.2); } }
 
-        /* Комета */
         .comet-v { position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; z-index: 999; }
         .comet-shield {
             position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
@@ -46,7 +42,6 @@
             transform: translateX(-50%); opacity: 0.7;
         }
 
-        /* Прицел */
         #aim-ui { position: absolute; width: 180px; height: 180px; border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; }
         .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); }
         .sector.active { background: rgba(241,196,15,0.4); border-top: 2px solid #f1c40f; }
@@ -79,7 +74,6 @@
         const MIN_ZOOM = 0.05, MAX_ZOOM = 0.45;
         const cometColors = ['#ff4500', '#00d4ff', '#2ecc71', '#f1c40f'];
 
-        // Сектора
         const aimUI = document.getElementById('aim-ui');
         for(let i=0; i<16; i++) {
             let s = document.createElement('div'); s.className = 'sector';
@@ -130,7 +124,12 @@
 
         function placeStar(x, y, p) {
             const size = p === 1 ? 18 : (p === 3 ? 28 : 42);
-            const b = Bodies.circle(x, y, size/2, { isStatic: true });
+            // Даем звездам разную массу и статус
+            const b = Bodies.circle(x, y, size/2, { 
+                isStatic: true, 
+                label: 'star', 
+                price: p 
+            });
             const v = document.createElement('div'); v.className = 'obj';
             v.style.width = size+'px'; v.style.height = size+'px';
             v.style.background = '#fff'; v.style.boxShadow = '0 0 15px #fff';
@@ -160,21 +159,82 @@
         function confirmLaunch() {
             if (!cometPending) return;
             const color = cometColors[Math.floor(Math.random()*4)];
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 10, { frictionAir: 0, restitution: 1 });
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 10, { 
+                frictionAir: 0, 
+                restitution: 0.8, // Прыгучесть при отскоке
+                label: 'comet'
+            });
             b.isComet = true;
             const v = document.createElement('div'); v.className = 'comet-v';
             v.style.boxShadow = `0 0 15px #fff, 0 0 30px ${color}`;
             v.innerHTML = `<div class="comet-shield"></div><div class="comet-tail" style="--c:${color}"></div>`;
             b.visual = v; view.appendChild(v);
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*0.25, y: Math.sin(cometPending.angle)*0.25 });
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*0.4, y: Math.sin(cometPending.angle)*0.4 });
             Composite.add(engine.world, b);
             aimUI.style.display = 'none';
             document.getElementById('comet-btn').classList.remove('active-launch');
             cometPending = null;
         }
 
+        // ЛОГИКА СТОЛКНОВЕНИЙ
         Events.on(engine, 'collisionStart', (e) => {
             e.pairs.forEach(p => {
+                const { bodyA, bodyB } = p;
+                
+                // Если комета врезается в другую комету
+                if (bodyA.label === 'comet' && bodyB.label === 'comet') {
+                    [bodyA, bodyB].forEach(b => { if(b.visual) b.visual.remove(); Composite.remove(engine.world, b); });
+                }
+                
+                // Если комета врезается в звезду
+                let comet = bodyA.label === 'comet' ? bodyA : (bodyB.label === 'comet' ? bodyB : null);
+                let star = bodyA.label === 'star' ? bodyA : (bodyB.label === 'star' ? bodyB : null);
+
+                if (comet && star) {
+                    if (star.price === 1 || star.price === 3) {
+                        // Уничтожаем звезду, комета летит сквозь (не прерываем её)
+                        if(star.visual) star.visual.remove();
+                        Composite.remove(engine.world, star);
+                    } 
+                    // Если звезда за 10 (star.price === 10), Matter.js автоматически сделает отскок, 
+                    // так как комета — динамическая, а звезда — статическая (isStatic: true).
+                }
+            });
+        });
+
+        Events.on(engine, 'afterUpdate', () => {
+            Composite.allBodies(engine.world).forEach(b => {
+                if (b.visual) {
+                    b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
+                    if(b.isComet) {
+                        const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
+                        b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+                    }
+                }
+            });
+        });
+
+        function updateSectors(a) {
+            const idx = (Math.round((a * 180 / Math.PI) / 22.5) + 16) % 16;
+            document.querySelectorAll('.sector').forEach((s, i) => s.classList.toggle('active', i === idx));
+        }
+
+        function updateTransform() {
+            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            if(cometPending) {
+                aimUI.style.left = (cometPending.wx * scale + offsetX) + 'px';
+                aimUI.style.top = (cometPending.wy * scale + offsetY) + 'px';
+            }
+            document.getElementById('minimap-point').style.left = (50 - (offsetX / 30)) + '%';
+            document.getElementById('minimap-point').style.top = (50 - (offsetY / 30)) + '%';
+            const zPct = ((scale - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
+            document.getElementById('zoom-indicator').style.width = zPct + '%';
+        }
+        updateTransform();
+    </script>
+</body>
+</html>
+e.pairs.forEach(p => {
                 if (p.bodyA.isComet && p.bodyB.isComet) {
                     [p.bodyA, p.bodyB].forEach(b => { if(b.visual) b.visual.remove(); Composite.remove(engine.world, b); });
                 }
