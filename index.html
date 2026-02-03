@@ -6,44 +6,31 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; color: white; }
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; transition: transform 0.3s ease-out; }
         
         .ui { position: absolute; z-index: 1000; width: 100%; pointer-events: none; }
-        .bottom-bar { 
-            position: absolute; bottom: 0; width: 100%; height: 90px; 
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-            display: flex; justify-content: center; align-items: center; gap: 5px; pointer-events: auto;
-        }
+        .bottom-bar { position: absolute; bottom: 0; width: 100%; height: 90px; background: linear-gradient(to top, #000, transparent); display: flex; justify-content: center; align-items: center; gap: 5px; pointer-events: auto; }
         
-        .btn { 
-            width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.1); 
-            border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 9px; 
-            display: flex; align-items: center; justify-content: center; transition: 0.3s;
-        }
-        .btn.active-launch { background: #f1c40f; color: black; box-shadow: 0 0 20px #f1c40f; animation: pulse-btn 1s infinite; }
-        @keyframes pulse-btn { 0% { scale: 1; } 50% { scale: 1.1; } 100% { scale: 1; } }
+        .btn { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 9px; display: flex; align-items: center; justify-content: center; }
+        .btn.active-launch { background: #f1c40f; color: #000; box-shadow: 0 0 20px #f1c40f; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { scale: 1; } 50% { scale: 1.1; } 100% { scale: 1; } }
 
-        .top-left { top: 45px; left: 20px; pointer-events: auto; }
-        .toggle-btn { background: rgba(0,0,0,0.6); border: 1px solid #fff; color: #fff; padding: 5px 10px; border-radius: 15px; font-size: 10px; }
+        /* Секторный прицел */
+        #aim-ui { position: absolute; width: 220px; height: 220px; border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,0.1); }
+        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 80% 40%, 0 0); border-top: 2px solid rgba(241,196,15,0.1); }
+        .sector.highlight { background: rgba(241,196,15,0.4); border-top: 2px solid #f1c40f; }
 
-        /* Эффект звезды $3 */
-        .star-container { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
-        .star-3-ray { position: absolute; top:50%; left:50%; height:1px; width:15px; transform-origin:left center; animation: colorSpin 4s infinite linear; }
-        @keyframes colorSpin { 0%{background:red} 25%{background:lime} 50%{background:blue} 75%{background:yellow} 100%{background:red} }
-
-        /* Комета */
-        #aim-ui { position: absolute; width: 200px; height: 200px; border: 2px dashed rgba(241,196,15,0.5); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); }
-        #aim-arrow { position: absolute; top:50%; left:50%; width: 100px; height: 2px; background: #f1c40f; transform-origin: left center; }
-        .comet-head { width: 8px; height: 8px; background: #fff; border-radius: 50%; box-shadow: 0 0 15px 5px orange, 0 0 5px 2px white; }
-        .comet-tail { position: absolute; width: 2px; height: 60px; background: linear-gradient(to top, rgba(255,215,0,0.6), transparent); transform-origin: top center; top: 4px; left: 3px; }
+        /* Графика объектов */
+        .obj { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
+        .comet-rock { width: 12px; height: 8px; background: #444; border-radius: 40% 60% 50% 30%; box-shadow: inset -2px -2px 5px #000, 0 0 10px orange; }
+        .comet-tail-rich { position: absolute; width: 4px; height: 80px; background: linear-gradient(to bottom, orange, transparent); filter: blur(4px); transform-origin: top; top: 5px; }
+        .star-particle { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; }
     </style>
 </head>
 <body>
     <div id="viewport"></div>
-    <div id="aim-ui"><div id="aim-arrow"></div></div>
-
-    <div class="ui top-left"><button class="toggle-btn" onclick="alert('Мои звезды включены')">МОИ ЗВЕЗДЫ</button></div>
+    <div id="aim-ui"></div>
 
     <div class="bottom-bar">
         <div class="btn" ontouchstart="initDrag(event, 'star', 1)">$1</div>
@@ -51,20 +38,27 @@
         <div class="btn" ontouchstart="initDrag(event, 'star', 10)">$10</div>
         <div class="btn" ontouchstart="initDrag(event, 'star', 25)">$25</div>
         <div id="comet-btn" class="btn" ontouchstart="initDrag(event, 'comet', 50)" onclick="confirmComet()">☄️</div>
-        <div class="btn" style="opacity:0.2">?</div>
-        <div class="btn" style="opacity:0.2">?</div>
-        <div class="btn" style="opacity:0.2">?</div>
+        <div class="btn" style="opacity:0.2">?</div><div class="btn" style="opacity:0.2">?</div><div class="btn" style="opacity:0.2">?</div>
     </div>
 
     <script>
-        const { Engine, Runner, Bodies, Composite, Body, Events } = Matter;
+        const { Engine, Runner, Bodies, Composite, Body, Events, Vector } = Matter;
         const engine = Engine.create(); engine.gravity.y = 0;
         const view = document.getElementById('viewport');
+        const aim = document.getElementById('aim-ui');
         const runner = Runner.create(); Runner.run(runner, engine);
 
         let scale = 1, offsetX = 0, offsetY = 0, lastDist = 0;
         let activeDrag = null, isPanning = false, lastX = 0, lastY = 0;
-        let cometPending = null; // Храним комету, которая ждет запуска
+        let cometPending = null;
+
+        // Создаем 16 секторов
+        for(let i=0; i<16; i++) {
+            let s = document.createElement('div');
+            s.className = 'sector';
+            s.style.transform = `rotate(${i * 22.5 - 11}deg)`;
+            aim.appendChild(s);
+        }
 
         function initDrag(e, type, price) {
             const t = e.touches[0];
@@ -78,7 +72,6 @@
                 if (window.innerHeight - t.pageY > 100) {
                     if(!activeDrag.active) { activeDrag.active = true; scale = 4; updateTransform(); }
                     activeDrag.x = t.pageX; activeDrag.y = t.pageY;
-                    checkEdgeScroll(t.pageX, t.pageY);
                 }
             } else if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -92,12 +85,13 @@
             if (cometPending) {
                 const dx = t.pageX - (cometPending.wx * scale + offsetX);
                 const dy = t.pageY - (cometPending.wy * scale + offsetY);
-                cometPending.angle = Math.atan2(dy, dx);
-                document.getElementById('aim-arrow').style.transform = `rotate(${cometPending.angle}rad)`;
+                const angle = Math.atan2(dy, dx);
+                cometPending.angle = Math.round(angle / (Math.PI/8)) * (Math.PI/8);
+                updateSectors(cometPending.angle);
             }
         });
 
-        window.addEventListener('touchend', (e) => {
+        window.addEventListener('touchend', () => {
             if (activeDrag && activeDrag.active) {
                 const wx = (activeDrag.x - offsetX) / scale;
                 const wy = (activeDrag.y - offsetY) / scale;
@@ -111,69 +105,80 @@
             if (!e.target.closest('.btn')) { isPanning = true; lastX = e.touches[0].pageX; lastY = e.touches[0].pageY; }
         });
 
+        function updateSectors(angle) {
+            const sectors = document.querySelectorAll('.sector');
+            const index = (Math.round(angle / (Math.PI/8)) + 16) % 16;
+            sectors.forEach((s, i) => s.classList.toggle('highlight', i === index));
+        }
+
         function placeStar(x, y, p) {
-            const c = document.createElement('div'); c.className = 'star-container';
-            c.style.left = x+'px'; c.style.top = y+'px';
-            if (p === 3) {
-                for(let i=0; i<6; i++){
-                    let r = document.createElement('div'); r.className = 'star-3-ray';
-                    r.style.transform = `rotate(${i*60}deg)`; c.appendChild(r);
-                }
-            }
-            let core = document.createElement('div'); core.style.width = '4px'; core.style.height = '4px';
-            core.style.background = '#fff'; core.style.borderRadius = '50%'; core.style.boxShadow = '0 0 10px #fff';
-            c.appendChild(core); view.appendChild(c); haptic('medium');
+            const b = Bodies.circle(x, y, p <= 3 ? 5 : 10, { isStatic: true, isSensor: true });
+            b.price = p;
+            const v = document.createElement('div'); v.className = 'obj';
+            v.innerHTML = `<div style="width:4px;height:4px;background:#fff;border-radius:50%;box-shadow:0 0 10px #fff;"></div>`;
+            b.visual = v; view.appendChild(v); Composite.add(engine.world, b);
         }
 
         function prepareComet(x, y) {
             cometPending = { wx: x, wy: y, angle: 0 };
-            const ui = document.getElementById('aim-ui');
-            ui.style.display = 'block';
-            ui.style.left = (x * scale + offsetX) + 'px';
-            ui.style.top = (y * scale + offsetY) + 'px';
+            aim.style.display = 'block';
+            updateTransform();
             document.getElementById('comet-btn').classList.add('active-launch');
-            haptic('medium');
         }
 
         function confirmComet() {
             if (!cometPending) return;
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 4, { frictionAir: 0 });
-            const v = document.createElement('div'); v.className = 'star-container';
-            v.innerHTML = '<div class="comet-tail"></div><div class="comet-head"></div>';
-            view.appendChild(v);
-            const speed = 0.04;
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * speed, y: Math.sin(cometPending.angle) * speed });
-            b.visual = v; Composite.add(engine.world, b);
-            
-            document.getElementById('aim-ui').style.display = 'none';
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 8, { frictionAir: 0 });
+            const v = document.createElement('div'); v.className = 'obj';
+            v.innerHTML = `<div class="comet-tail-rich"></div><div class="comet-rock"></div>`;
+            b.visual = v; b.isComet = true;
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle) * 0.05, y: Math.sin(cometPending.angle) * 0.05 });
+            Composite.add(engine.world, b);
+            aim.style.display = 'none';
             document.getElementById('comet-btn').classList.remove('active-launch');
-            cometPending = null; haptic('heavy');
-        }
-
-        function checkEdgeScroll(x, y) {
-            const p = 50;
-            if (x < p) offsetX += 10; if (x > window.innerWidth - p) offsetX -= 10;
-            if (y < p) offsetY += 10; if (y > window.innerHeight - p) offsetY -= 10;
-            updateTransform();
-        }
-
-        function updateTransform() { 
-            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`; 
-            if(cometPending) {
-                const ui = document.getElementById('aim-ui');
-                ui.style.left = (cometPending.wx * scale + offsetX) + 'px';
-                ui.style.top = (cometPending.wy * scale + offsetY) + 'px';
-            }
+            cometPending = null;
         }
 
         Events.on(engine, 'afterUpdate', () => {
-            Composite.allBodies(engine.world).forEach(b => {
+            const bodies = Composite.allBodies(engine.world);
+            bodies.forEach(b => {
                 if (b.visual) {
-                    b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
-                    b.visual.style.transform = `translate(-50%, -50%) rotate(${Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2}rad)`;
+                    b.visual.style.left = b.position.x + 'px';
+                    b.visual.style.top = b.position.y + 'px';
+                    if(b.isComet) {
+                        b.visual.style.transform = `translate(-50%, -50%) rotate(${Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2}rad) scale(${scale > 5 ? 1.5 : 1})`;
+                        // Проверка столкновений
+                        bodies.forEach(star => {
+                            if(!star.isComet && star.price <= 3 && Vector.magnitude(Vector.sub(b.position, star.position)) < 15) {
+                                createExplosion(star.position.x, star.position.y);
+                                Composite.remove(engine.world, star);
+                                star.visual.remove();
+                                haptic('medium');
+                            }
+                        });
+                    }
                 }
             });
         });
+
+        function createExplosion(x, y) {
+            for(let i=0; i<8; i++) {
+                const p = document.createElement('div'); p.className = 'star-particle';
+                p.style.left = x+'px'; p.style.top = y+'px';
+                view.appendChild(p);
+                const ang = Math.random()*Math.PI*2; const dist = 20+Math.random()*20;
+                p.animate([{ transform: `translate(0,0)`, opacity: 1 }, { transform: `translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist}px)`, opacity: 0 }], 800);
+                setTimeout(() => p.remove(), 800);
+            }
+        }
+
+        function updateTransform() {
+            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            if(cometPending) {
+                aim.style.left = (cometPending.wx * scale + offsetX) + 'px';
+                aim.style.top = (cometPending.wy * scale + offsetY) + 'px';
+            }
+        }
 
         function haptic(s) { if(window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred(s); }
         window.Telegram.WebApp.ready();
