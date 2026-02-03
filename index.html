@@ -6,149 +6,174 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; color: white; }
-        /* Контейнер для масштабирования */
-        #universe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform-origin: center; transition: transform 0.1s ease-out; }
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        /* Интерфейс */
-        .ui-panel { position: absolute; z-index: 1000; width: 100%; pointer-events: none; }
-        .top { top: 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-        .bottom { bottom: 30px; display: flex; justify-content: center; gap: 8px; }
-        
-        .btn { 
-            pointer-events: auto; padding: 10px; border-radius: 12px; 
-            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
-            color: white; font-size: 11px; cursor: pointer; text-align: center; min-width: 50px;
-        }
-        .btn.active { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; background: rgba(241,196,15,0.2); }
-        
-        .zoom-container { pointer-events: auto; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 20px; display: flex; align-items: center; gap: 10px; }
-        input[type=range] { width: 150px; accent-color: #f1c40f; }
+        .ui { position: absolute; z-index: 1000; width: 100%; pointer-events: none; }
+        .bottom { bottom: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px; }
+        .top-info { top: 40px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; }
 
-        /* Эффект звезды */
-        .star-visual {
-            position: absolute; border-radius: 50%; background: #fff;
-            box-shadow: 0 0 15px 4px rgba(255,255,255,0.8), 0 0 30px 8px rgba(255,255,255,0.4);
-            pointer-events: none; transform: translate(-50%, -50%);
+        .btn { 
+            pointer-events: auto; width: 50px; height: 50px; border-radius: 12px; 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);
+            color: white; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
-        /* Эффект кометы */
-        .comet-visual {
+        .btn.active { border-color: #f1c40f; background: rgba(241,196,15,0.1); }
+        .btn.empty { opacity: 0.3; border-style: dashed; }
+
+        /* Эффект звезды за $3 */
+        .star-3 {
             position: absolute; width: 4px; height: 4px; background: #fff; border-radius: 50%;
-            box-shadow: 0 0 10px 2px #f1c40f; pointer-events: none; transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px #fff;
+        }
+        .ray {
+            position: absolute; top: 50%; left: 50%; height: 1px; background: white;
+            transform-origin: left center; opacity: 0.6;
+            animation: colorShift 4s infinite linear;
+        }
+        @keyframes colorShift {
+            0% { background: #ff4d4d; width: 8px; }
+            25% { background: #4dff4d; width: 12px; }
+            50% { background: #4d4dff; width: 8px; }
+            75% { background: #ffff4d; width: 12px; }
+            100% { background: #ff4d4d; width: 8px; }
+        }
+
+        /* Хвост кометы */
+        .comet-tail {
+            position: absolute; width: 2px; height: 40px;
+            background: linear-gradient(to top, rgba(241,196,15,0.6), transparent);
+            transform-origin: top center; pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div id="universe"></div>
+    <div id="viewport"></div>
 
-    <div class="ui-panel top">
-        <div class="zoom-container">
-            <span>zoom</span>
-            <input type="range" min="0.1" max="20" step="0.1" value="1" oninput="changeZoom(this.value)">
-            <span id="zoom-val">1x</span>
-        </div>
-        <button class="btn" style="width:120px" onclick="toggleFilter()">ВСЕ / МОИ</button>
-    </div>
+    <div class="ui top-info" id="debug">Используй два пальца для Zoom и перемещения</div>
 
-    <div class="ui-panel bottom">
+    <div class="ui bottom">
         <div class="btn active" id="b1" onclick="setMode('star', 1, 'b1')">$1</div>
         <div class="btn" id="b3" onclick="setMode('star', 3, 'b3')">$3</div>
         <div class="btn" id="b10" onclick="setMode('star', 10, 'b10')">$10</div>
         <div class="btn" id="b25" onclick="setMode('star', 25, 'b25')">$25</div>
-        <div class="btn" id="bc" onclick="setMode('comet', 50, 'bc')">☄️ $50</div>
+        <div class="btn" id="bc" onclick="setMode('comet', 50, 'bc')">☄️$50</div>
+        <div class="btn empty">?</div>
+        <div class="btn empty">?</div>
+        <div class="btn empty">?</div>
     </div>
 
     <script>
         const { Engine, Runner, Bodies, Composite, Body, Events } = Matter;
         const engine = Engine.create(); engine.gravity.y = 0;
-        const universe = document.getElementById('universe');
+        const view = document.getElementById('viewport');
         const runner = Runner.create();
         Runner.run(runner, engine);
 
-        let mode = 'star';
-        let currentPrice = 1;
-        let zoom = 1;
+        let mode = 'star', price = 1;
+        let scale = 1, offsetX = 0, offsetY = 0;
+        let lastPinchDist = 0, isDragging = false, lastX = 0, lastY = 0;
 
         function setMode(m, p, id) {
-            mode = m; currentPrice = p;
-            document.querySelectorAll('.bottom .btn').forEach(b => b.classList.remove('active'));
+            mode = m; price = p;
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
             document.getElementById(id).classList.add('active');
         }
 
-        function changeZoom(v) {
-            zoom = v;
-            universe.style.transform = `scale(${v})`;
-            document.getElementById('zoom-val').innerText = v + 'x';
-        }
-
-        window.addEventListener('click', (e) => {
-            if (e.target.closest('.ui-panel')) return;
-
-            // Вычисляем координаты с учетом зума
-            const rect = universe.getBoundingClientRect();
-            const x = (e.clientX - window.innerWidth/2) / zoom + window.innerWidth/2;
-            const y = (e.clientY - window.innerHeight/2) / zoom + window.innerHeight/2;
-
-            if (mode === 'star') createStar(x, y, currentPrice);
-            else createComet(x, y);
-        });
-
-        function createStar(x, y, price) {
-            const size = price === 25 ? 6 : (price === 10 ? 4 : 2);
-            const starBody = Bodies.circle(x, y, size, { isStatic: true });
-            
+        // Рендеринг объектов
+        function createStar(x, y, p) {
             const visual = document.createElement('div');
-            visual.className = 'star-visual';
-            visual.style.width = size + 'px'; visual.style.height = size + 'px';
+            visual.style.position = 'absolute';
             visual.style.left = x + 'px'; visual.style.top = y + 'px';
             
-            if (price >= 10) {
-                const name = prompt("Имя звезды:", "Звезда");
-                if (name) {
-                    const label = document.createElement('div');
-                    label.style.position = 'absolute'; label.style.top = '-20px';
-                    label.style.fontSize = '12px'; label.innerText = name;
-                    visual.appendChild(label);
+            if (p === 3) {
+                visual.className = 'star-3';
+                for(let i=0; i<5; i++) {
+                    const ray = document.createElement('div');
+                    ray.className = 'ray';
+                    ray.style.transform = `rotate(${i * 72}deg)`;
+                    visual.appendChild(ray);
                 }
+            } else {
+                const s = p === 25 ? 6 : (p === 10 ? 4 : 2);
+                visual.style.width = s+'px'; visual.style.height = s+'px';
+                visual.style.background = '#fff'; visual.style.borderRadius = '50%';
+                visual.style.boxShadow = `0 0 ${s*3}px #fff`;
             }
-
-            universe.appendChild(visual);
-            Composite.add(engine.world, starBody);
+            view.appendChild(visual);
             haptic('light');
         }
 
         function createComet(x, y) {
-            const cometBody = Bodies.circle(x, y, 3, { frictionAir: 0 });
+            const body = Bodies.circle(x, y, 3, { frictionAir: 0 });
             const visual = document.createElement('div');
-            visual.className = 'comet-visual';
-            visual.style.left = x + 'px'; visual.style.top = y + 'px';
-            universe.appendChild(visual);
+            visual.style.position = 'absolute';
+            visual.innerHTML = '<div style="width:6px;height:6px;background:#fff;border-radius:50%;box-shadow:0 0 10px orange;"></div>';
+            const tail = document.createElement('div');
+            tail.className = 'comet-tail';
+            visual.appendChild(tail);
             
-            // Задаем ОЧЕНЬ медленную скорость (пролетит экран за долгое время)
-            Body.setVelocity(cometBody, { x: 0.02, y: -0.01 });
-            
-            cometBody.visual = visual;
-            Composite.add(engine.world, cometBody);
+            view.appendChild(visual);
+            Body.setVelocity(body, { x: 0.05, y: -0.02 });
+            body.visual = visual;
+            Composite.add(engine.world, body);
             haptic('heavy');
         }
 
+        // Управление (Zoom & Pan)
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                lastPinchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            } else if (e.touches.length === 1) {
+                isDragging = true;
+                lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                const delta = dist / lastPinchDist;
+                scale = Math.min(Math.max(scale * delta, 0.2), 20);
+                lastPinchDist = dist;
+                updateTransform();
+            } else if (isDragging) {
+                offsetX += e.touches[0].pageX - lastX;
+                offsetY += e.touches[0].pageY - lastY;
+                lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
+                updateTransform();
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) {
+                isDragging = false;
+                // Клик для создания объекта (если не было сильного сдвига)
+                if (Math.abs(e.changedTouches[0].pageX - lastX) < 5) {
+                    const worldX = (e.changedTouches[0].pageX - offsetX) / scale;
+                    const worldY = (e.changedTouches[0].pageY - offsetY) / scale;
+                    if (mode === 'star') createStar(worldX, worldY, price);
+                    else createComet(worldX, worldY);
+                }
+            }
+        });
+
+        function updateTransform() {
+            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        }
+
         Events.on(engine, 'afterUpdate', () => {
-            Composite.allBodies(engine.world).forEach(body => {
-                if (body.visual) {
-                    body.visual.style.left = body.position.x + 'px';
-                    body.visual.style.top = body.position.y + 'px';
+            Composite.allBodies(engine.world).forEach(b => {
+                if (b.visual) {
+                    b.visual.style.left = b.position.x + 'px';
+                    b.visual.style.top = b.position.y + 'px';
+                    const angle = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
+                    b.visual.style.transform = `rotate(${angle}deg)`;
                 }
             });
         });
 
-        function haptic(style) {
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                if (style === 'light') Telegram.WebApp.HapticFeedback.impactOccurred('light');
-                else Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            }
-        }
-
-        function toggleFilter() { alert("Функция будет доступна в общей сети."); }
+        function haptic(s) { if(window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred(s); }
         window.Telegram.WebApp.ready();
     </script>
 </body>
