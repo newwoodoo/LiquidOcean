@@ -10,37 +10,39 @@
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
         #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; }
-        #zoom-bar { width: 100px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 8px; border-radius: 3px; position: relative; border: 1px solid #333; overflow: hidden; }
-        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; width: 0%; transform: translateX(-50%); transition: width 0.2s; }
-        
-        #minimap { width: 90px; height: 90px; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 4px; position: relative; }
-        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px #ff0; }
+        #zoom-bar { width: 100px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 8px; border-radius: 3px; border: 1px solid #333; position: relative; overflow: hidden; }
+        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; width: 0%; transform: translateX(-50%); }
 
         .ui-panel { position: absolute; bottom: 0; width: 100%; height: 100px; background: #111; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 10001; border-top: 1px solid #333; padding-bottom: env(safe-area-inset-bottom); }
         .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
 
-        .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; transition: opacity 0.3s; }
+        .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
         
-        /* Звезда $3: Мерцание */
-        .ray-3 { position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); transform-origin: 50% 100%; }
-        .glow-3 { position: absolute; width: 100%; height: 100%; background: radial-gradient(circle, #fff, transparent 70%); animation: pulseGlow 2s infinite ease-in-out; }
-        @keyframes pulseGlow { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(2.5); opacity: 0.8; } }
+        /* Звезда $3: Вращающиеся лучи */
+        .ray-3 { position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); transform-origin: 50% 100%; animation: rayRotate 4s linear infinite; }
+        @keyframes rayRotate { from { transform: translate(-50%, -100%) rotate(0deg); } to { transform: translate(-50%, -100%) rotate(360deg); } }
+        .blink-3 { position: absolute; width: 100%; height: 100%; border-radius: 50%; background: #fff; box-shadow: 0 0 30px #fff; animation: starBlink 1s ease-in-out infinite alternate; }
+        @keyframes starBlink { from { transform: scale(0.8); opacity: 0.5; } to { transform: scale(1.2); opacity: 1; } }
 
         /* Звезда $10: Пояс */
-        .belt-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotateX(75deg); }
-        .belt-line { position: absolute; border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; }
-        .asteroid { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; }
+        .ring-10 { position: absolute; top: 50%; left: 50%; border: 4px double rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%) rotateX(75deg); }
+        .belt-10 { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform-style: preserve-3d; animation: rotateBelt 15s linear infinite; }
+        @keyframes rotateBelt { from { transform: translate(-50%, -50%) rotateX(75deg) rotateZ(0deg); } to { transform: translate(-50%, -50%) rotateX(75deg) rotateZ(360deg); } }
+        .ast { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; }
 
-        /* Прицел кометы */
-        #aim-ui { position: absolute; width: 180px; height: 180px; border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; }
-        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); }
-        .sector.active { background: rgba(241,196,15,0.4); }
+        /* Комета */
+        .comet-head { position: absolute; width: 10px; height: 10px; background: #fff; border-radius: 50%; box-shadow: 0 0 15px #00d4ff; }
+        .comet-tail { position: absolute; top: 5px; left: 50%; width: 15px; height: 80px; background: linear-gradient(to bottom, rgba(0,212,255,0.8), transparent); clip-path: polygon(15% 0, 85% 0, 100% 100%, 0 100%); transform: translateX(-50%); }
+
+        /* Прицел */
+        #aim-ui { position: absolute; width: 160px; height: 160px; border: 2px dashed rgba(255,255,255,0.2); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); }
+        .sec { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); }
+        .sec.act { background: rgba(241,196,15,0.6); box-shadow: 0 0 15px #f1c40f; }
     </style>
 </head>
 <body>
     <div id="ui-container">
         <div id="zoom-bar"><div id="zoom-indicator"></div></div>
-        <div id="minimap"><div id="minimap-point"></div></div>
     </div>
     <div id="viewport"></div>
     <div id="aim-ui"></div>
@@ -61,14 +63,12 @@
         let scale = 0.2, offsetX = window.innerWidth/2, offsetY = window.innerHeight/2;
         let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0, cometPending = null;
 
-        const star1Styles = [
-            '#ffffff', '#e0f7fa', '#fff9c4', '#f8bbd0', '#d1c4e9', '#c8e6c9', '#ffccbc'
-        ];
+        const colors1 = ['#fff', '#0cf', '#f0f', '#0f0', '#ff0', '#f60', '#9cf'];
 
-        // Создаем сегменты прицела
+        // Инициализация прицела
         const aimUI = document.getElementById('aim-ui');
         for(let i=0; i<16; i++) {
-            let s = document.createElement('div'); s.className = 'sector';
+            let s = document.createElement('div'); s.className = 'sec';
             s.style.transform = `rotate(${i * 22.5 - 11.25}deg)`;
             aimUI.appendChild(s);
         }
@@ -89,8 +89,8 @@
                 if (window.innerHeight - t.pageY > 120) activeDrag.active = true;
             } else if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                const nextScale = Math.min(Math.max(scale * (dist / lastDist), 0.05), 0.8);
                 const midX = (e.touches[0].pageX + e.touches[1].pageX) / 2, midY = (e.touches[0].pageY + e.touches[1].pageY) / 2;
-                const nextScale = Math.min(Math.max(scale * (dist / lastDist), 0.05), 0.5);
                 offsetX = midX - (midX - offsetX) * (nextScale / scale);
                 offsetY = midY - (midY - offsetY) * (nextScale / scale);
                 scale = nextScale; lastDist = dist;
@@ -105,52 +105,50 @@
                 const dx = e.touches[0].pageX - (cometPending.wx * scale + offsetX);
                 const dy = e.touches[0].pageY - (cometPending.wy * scale + offsetY);
                 cometPending.angle = Math.atan2(dy, dx);
-                updateSectors(cometPending.angle);
+                const idx = (Math.round((cometPending.angle * 180 / Math.PI) / 22.5) + 16) % 16;
+                document.querySelectorAll('.sec').forEach((s, i) => s.classList.toggle('act', i === idx));
             }
         });
 
         window.addEventListener('touchend', () => {
             if (activeDrag && activeDrag.active) {
-                const wx = (activeDrag.x - offsetX) / scale;
-                const wy = (activeDrag.y - offsetY) / scale;
-                if (activeDrag.type === 'star') placeStar(wx, wy, activeDrag.price);
-                else prepareComet(wx, wy);
+                placeStar((activeDrag.x - offsetX) / scale, (activeDrag.y - offsetY) / scale, activeDrag.price);
             }
             activeDrag = null; isPanning = false;
         });
 
         function placeStar(x, y, p) {
-            const size = p === 1 ? 12 : (p === 3 ? 24 : 50);
+            const size = p === 1 ? 12 : (p === 3 ? 30 : 60);
             const b = Bodies.circle(x, y, size/2, { isStatic: true, label: 'star', price: p });
             const v = document.createElement('div'); v.className = 'obj';
             v.style.width = size+'px'; v.style.height = size+'px';
             
             if (p === 1) {
-                const color = star1Styles[Math.floor(Math.random()*7)];
-                v.style.background = '#fff';
-                v.style.boxShadow = `0 0 10px ${color}`;
+                const c = colors1[Math.floor(Math.random()*7)];
+                v.style.background = '#fff'; v.style.boxShadow = `0 0 15px ${c}`;
+                v.style.animation = `starBlink ${1 + Math.random()}s infinite alternate`;
             } else if (p === 3) {
-                v.style.background = '#fff';
-                v.innerHTML = '<div class="glow-3"></div>';
-                for(let i=0; i<12; i++) {
+                v.innerHTML = '<div class="blink-3"></div>';
+                for(let i=0; i<8; i++) {
                     let r = document.createElement('div'); r.className = 'ray-3';
-                    r.style.height = (i%2 === 0 ? 40 : 20) + 'px';
-                    r.style.transform = `translate(-50%, -100%) rotate(${i*30}deg)`;
+                    r.style.transform = `translate(-50%, -100%) rotate(${i*45}deg)`;
+                    r.style.animationDelay = -(i*0.5)+'s';
                     v.appendChild(r);
                 }
             } else if (p === 10) {
                 v.style.background = '#fff';
-                let belt = document.createElement('div'); belt.className = 'belt-container';
-                belt.style.width = size*3+'px'; belt.style.height = size*3+'px';
-                belt.innerHTML = '<div class="belt-line" style="width:100%; height:100%; top:0; left:0;"></div>';
-                for(let i=0; i<32; i++) {
-                    let a = document.createElement('div'); a.className = 'asteroid';
-                    a.style.left = (50 + 50*Math.cos(i*0.2))+'%'; a.style.top = (50 + 50*Math.sin(i*0.2))+'%';
+                let ring = document.createElement('div'); ring.className = 'ring-10';
+                ring.style.width = size*2.5+'px'; ring.style.height = size*2.5+'px';
+                let belt = document.createElement('div'); belt.className = 'belt-10';
+                for(let i=0; i<60; i++) {
+                    let a = document.createElement('div'); a.className = 'ast';
+                    let ang = i * (Math.PI * 2 / 60);
+                    a.style.left = 50 + 50 * Math.cos(ang) + '%';
+                    a.style.top = 50 + 50 * Math.sin(ang) + '%';
                     belt.appendChild(a);
                 }
-                v.appendChild(belt);
+                v.appendChild(ring); v.appendChild(belt);
             }
-
             b.visual = v; view.appendChild(v); Composite.add(engine.world, b);
         }
 
@@ -162,19 +160,13 @@
 
         function confirmLaunch() {
             if (!cometPending) return;
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 8, { frictionAir: 0, restitution: 0.9 });
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 8, { frictionAir: 0, label: 'comet' });
             const v = document.createElement('div'); v.className = 'obj';
-            v.style.width = '12px'; v.style.height = '12px'; v.style.background = '#fff';
-            v.style.boxShadow = '0 0 15px #00d4ff';
+            v.innerHTML = '<div class="comet-head"></div><div class="comet-tail"></div>';
             b.visual = v; view.appendChild(v);
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*5, y: Math.sin(cometPending.angle)*5 });
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*4, y: Math.sin(cometPending.angle)*4 });
             Composite.add(engine.world, b);
             aimUI.style.display = 'none'; cometPending = null;
-        }
-
-        function updateSectors(a) {
-            const idx = (Math.round((a * 180 / Math.PI) / 22.5) + 16) % 16;
-            document.querySelectorAll('.sector').forEach((s, i) => s.classList.toggle('active', i === idx));
         }
 
         function updateTransform() {
@@ -182,36 +174,23 @@
             if(cometPending) {
                 aimUI.style.left = (cometPending.wx * scale + offsetX) + 'px';
                 aimUI.style.top = (cometPending.wy * scale + offsetY) + 'px';
+                aimUI.style.transform = `translate(-50%, -50%) scale(${1/scale * 0.2})`;
             }
+            document.getElementById('zoom-indicator').style.width = ((scale - 0.05) / 0.75) * 100 + '%';
             
-            // Динамическая графика при зуме
-            document.querySelectorAll('.obj').forEach(el => {
-                const b = Composite.allBodies(engine.world).find(body => body.visual === el);
-                if (b && b.price === 10) {
-                    const belt = el.querySelector('.belt-line');
-                    const asteroids = el.querySelectorAll('.asteroid');
-                    if (scale < 0.1) { // Далеко
-                        belt.style.display = 'block';
-                        asteroids.forEach(a => a.style.display = 'none');
-                    } else { // Близко
-                        belt.style.display = 'none';
-                        asteroids.forEach(a => a.style.display = 'block');
-                    }
-                }
-            });
-
-            const zPct = ((scale - 0.05) / 0.45) * 100;
-            document.getElementById('zoom-indicator').style.width = zPct + '%';
-            
-            let mX = 50 - (offsetX / 100); let mY = 50 - (offsetY / 100);
-            document.getElementById('minimap-point').style.left = Math.max(0, Math.min(100, mX)) + '%';
-            document.getElementById('minimap-point').style.top = Math.max(0, Math.min(100, mY)) + '%';
+            // Динамический вид для за 10
+            document.querySelectorAll('.ring-10').forEach(r => r.style.opacity = scale < 0.15 ? "1" : "0.3");
+            document.querySelectorAll('.belt-10').forEach(b => b.style.opacity = scale < 0.15 ? "0" : "1");
         }
 
         Events.on(engine, 'afterUpdate', () => {
             Composite.allBodies(engine.world).forEach(b => {
                 if (b.visual) {
                     b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
+                    if (b.label === 'comet') {
+                        const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
+                        b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+                    }
                 }
             });
         });
@@ -221,4 +200,3 @@
     </script>
 </body>
 </html>
-
