@@ -11,31 +11,28 @@
         
         #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; pointer-events: none; }
         #zoom-bar { width: 80px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 5px; border-radius: 3px; position: relative; overflow: hidden; border: 1px solid #333; }
-        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; transform: translateX(-50%); width: 0%; transition: width 0.1s; }
-        #minimap { width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 4px; position: relative; }
-        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); top: 50%; left: 50%; box-shadow: 0 0 10px #ff0; }
+        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; width: 0%; transition: width 0.1s; }
+        #minimap { width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 4px; position: relative; overflow: hidden; }
+        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px #ff0; }
 
         .ui-panel { position: absolute; bottom: 0; width: 100%; height: 100px; background: #111; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 10001; border-top: 1px solid #333; padding-bottom: env(safe-area-inset-bottom); }
         .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; }
 
         .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
         
-        .ray-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
         .ray { 
             position: absolute; top: 50%; left: 50%; width: 2px; height: 40px; 
             background: linear-gradient(to top, #fff, transparent); 
             transform-origin: bottom center; 
             animation: rayPulse 1.5s infinite alternate;
         }
-        @keyframes rayPulse { from { opacity: 0.2; transform: translate(-50%, -100%) scaleY(0.8); } to { opacity: 0.6; transform: translate(-50%, -100%) scaleY(1.2); } }
+        @keyframes rayPulse { from { opacity: 0.2; transform: translate(-50%, -100%) scaleY(0.7); } to { opacity: 0.6; transform: translate(-50%, -100%) scaleY(1.1); } }
 
         .comet-v { position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; z-index: 999; }
         .comet-shield { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 32px; height: 14px; border-radius: 32px 32px 0 0; background: radial-gradient(ellipse at bottom, rgba(255,255,255,0.5), transparent 80%); }
         .comet-tail { position: absolute; top: 2px; left: 50%; width: 32px; height: 150px; background: linear-gradient(to bottom, var(--c), transparent); clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%); transform: translateX(-50%); opacity: 0.6; }
 
         #aim-ui { position: absolute; width: 160px; height: 160px; border: 2px dashed rgba(255,255,255,0.2); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); z-index: 5000; }
-        .sector { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); }
-        .sector.active { background: rgba(241,196,15,0.4); }
     </style>
 </head>
 <body>
@@ -63,7 +60,7 @@
         let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0, cometPending = null;
 
         const MIN_ZOOM = 0.05, MAX_ZOOM = 0.5;
-        const cometColors = ['#ff4500', '#00d4ff', '#2ecc71', '#f1c40f'];
+        const PAN_SPEED = 0.02; // Замедление в 50 раз
 
         function initDrag(e, type, price) {
             e.stopPropagation();
@@ -75,9 +72,7 @@
             if (e.touches.length === 2) {
                 lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
             } else if (!e.target.closest('.ui-panel')) {
-                isPanning = true;
-                lastX = e.touches[0].pageX;
-                lastY = e.touches[0].pageY;
+                isPanning = true; lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
             }
         });
 
@@ -87,14 +82,23 @@
                 activeDrag.x = t.pageX; activeDrag.y = t.pageY;
                 if (window.innerHeight - t.pageY > 120) activeDrag.active = true;
             } else if (e.touches.length === 2) {
-                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                const t1 = e.touches[0], t2 = e.touches[1];
+                const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
+                const midX = (t1.pageX + t2.pageX) / 2, midY = (t1.pageY + t2.pageY) / 2;
+                
                 const delta = dist / lastDist;
                 const nextScale = Math.min(Math.max(scale * delta, MIN_ZOOM), MAX_ZOOM);
+                
+                // Зум ровно под пальцами
+                offsetX -= (midX - offsetX) * (nextScale / scale - 1);
+                offsetY -= (midY - offsetY) * (nextScale / scale - 1);
+                
                 scale = nextScale; lastDist = dist;
                 updateTransform();
             } else if (isPanning) {
-                offsetX += e.touches[0].pageX - lastX;
-                offsetY += e.touches[0].pageY - lastY;
+                // Плавное движение (замедленное)
+                offsetX += (e.touches[0].pageX - lastX) * PAN_SPEED;
+                offsetY += (e.touches[0].pageY - lastY) * PAN_SPEED;
                 lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
                 updateTransform();
             }
@@ -121,6 +125,7 @@
             const v = document.createElement('div'); v.className = 'obj';
             v.style.width = size+'px'; v.style.height = size+'px';
             v.style.background = '#fff'; v.style.boxShadow = `0 0 ${size/2}px #fff`;
+            
             if (p === 3) {
                 for(let i=0; i<8; i++) {
                     let r = document.createElement('div'); r.className = 'ray';
@@ -143,9 +148,9 @@
 
         function confirmLaunch() {
             if (!cometPending) return;
-            const color = cometColors[Math.floor(Math.random()*cometColors.length)];
             const b = Bodies.circle(cometPending.wx, cometPending.wy, 8, { frictionAir: 0, restitution: 0.9, label: 'comet' });
             const v = document.createElement('div'); v.className = 'comet-v';
+            const color = ['#ff4500', '#00d4ff', '#2ecc71', '#f1c40f'][Math.floor(Math.random()*4)];
             v.style.boxShadow = `0 0 15px ${color}`;
             v.innerHTML = `<div class="comet-shield"></div><div class="comet-tail" style="--c:${color}"></div>`;
             b.visual = v; view.appendChild(v);
@@ -155,27 +160,14 @@
             cometPending = null;
         }
 
-        Events.on(engine, 'collisionStart', (e) => {
-            e.pairs.forEach(p => {
-                const { bodyA, bodyB } = p;
-                if (bodyA.label === 'comet' && bodyB.label === 'comet') {
-                    [bodyA, bodyB].forEach(b => { if(b.visual) b.visual.remove(); Composite.remove(engine.world, b); });
-                }
-                let comet = bodyA.label === 'comet' ? bodyA : (bodyB.label === 'comet' ? bodyB : null);
-                let star = bodyA.label === 'star' ? bodyA : (bodyB.label === 'star' ? bodyB : null);
-                if (comet && star && (star.price === 1 || star.price === 3)) {
-                    if(star.visual) star.visual.remove();
-                    Composite.remove(engine.world, star);
-                }
-            });
-        });
-
         Events.on(engine, 'afterUpdate', () => {
             Composite.allBodies(engine.world).forEach(b => {
                 if (b.visual) {
                     b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
-                    const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
-                    b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+                    if (b.label === 'comet') {
+                        const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
+                        b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
+                    }
                 }
             });
         });
@@ -190,9 +182,11 @@
             // Шкала зума
             const zPct = ((scale - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
             document.getElementById('zoom-indicator').style.width = zPct + '%';
-            // Мини-карта
-            document.getElementById('minimap-point').style.left = (50 - (offsetX / (50*scale))) + '%';
-            document.getElementById('minimap-point').style.top = (50 - (offsetY / (50*scale))) + '%';
+            // Ограничение точки на мини-карте
+            let mX = 50 - (offsetX / (100 * scale));
+            let mY = 50 - (offsetY / (100 * scale));
+            document.getElementById('minimap-point').style.left = Math.max(5, Math.min(95, mX)) + '%';
+            document.getElementById('minimap-point').style.top = Math.max(5, Math.min(95, mY)) + '%';
         }
 
         updateTransform();
