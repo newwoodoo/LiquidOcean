@@ -9,22 +9,19 @@
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; pointer-events: none; }
-        #zoom-bar { width: 80px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 5px; border-radius: 3px; position: relative; overflow: hidden; border: 1px solid #333; }
-        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; width: 0%; }
-        #minimap { width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 4px; position: relative; overflow: hidden; }
-        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px #ff0; z-index: 10; }
+        #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; }
+        #zoom-bar { width: 100px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 8px; border-radius: 3px; position: relative; overflow: hidden; border: 1px solid #333; }
+        /* Индикатор из центра */
+        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; width: 0%; transform: translateX(-50%); transition: width 0.1s; }
+        
+        #minimap { width: 90px; height: 90px; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 4px; position: relative; overflow: hidden; pointer-events: auto; }
+        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px #ff0; pointer-events: none; }
 
         .ui-panel { position: absolute; bottom: 0; width: 100%; height: 100px; background: #111; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 10001; border-top: 1px solid #333; padding-bottom: env(safe-area-inset-bottom); }
         .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
 
         .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
-        
-        /* Лучи теперь создаются через JS корректно */
-        .ray { 
-            position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); 
-            transform-origin: 50% 100%; animation: rayPulse 1.5s infinite alternate;
-        }
+        .ray { position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); transform-origin: 50% 100%; animation: rayPulse 1.5s infinite alternate; }
         @keyframes rayPulse { from { opacity: 0.2; height: 30px; } to { opacity: 0.6; height: 50px; } }
 
         .comet-v { position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; z-index: 999; }
@@ -37,7 +34,9 @@
 <body>
     <div id="ui-container">
         <div id="zoom-bar"><div id="zoom-indicator"></div></div>
-        <div id="minimap"><div id="minimap-point"></div></div>
+        <div id="minimap" onmousedown="teleport(event)" ontouchstart="teleport(event)">
+            <div id="minimap-point"></div>
+        </div>
     </div>
     <div id="viewport"></div>
     <div id="aim-ui"></div>
@@ -59,7 +58,19 @@
         let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0, cometPending = null;
 
         const MIN_ZOOM = 0.05, MAX_ZOOM = 0.5;
-        const WORLD_LIMIT = 5000; // Мир 10к на 10к пикселей (примерно 10 экранов)
+        const WORLD_LIMIT = 5000; 
+
+        function teleport(e) {
+            e.stopPropagation();
+            const rect = document.getElementById('minimap').getBoundingClientRect();
+            const touch = e.touches ? e.touches[0] : e;
+            const px = (touch.clientX - rect.left) / rect.width;
+            const py = (touch.clientY - rect.top) / rect.height;
+            
+            offsetX = (50 - px * 100) * 100;
+            offsetY = (50 - py * 100) * 100;
+            updateTransform();
+        }
 
         function initDrag(e, type, price) {
             e.stopPropagation();
@@ -70,7 +81,7 @@
         window.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
                 lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-            } else if (!e.target.closest('.ui-panel')) {
+            } else if (!e.target.closest('.ui-panel') && !e.target.closest('#minimap')) {
                 isPanning = true; lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
             }
         });
@@ -84,15 +95,19 @@
                 const t1 = e.touches[0], t2 = e.touches[1];
                 const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
                 const midX = (t1.pageX + t2.pageX) / 2, midY = (t1.pageY + t2.pageY) / 2;
+                
                 const delta = dist / lastDist;
                 const nextScale = Math.min(Math.max(scale * delta, MIN_ZOOM), MAX_ZOOM);
+                
+                // Исправленная математика зума (не убегает)
                 offsetX -= (midX - offsetX) * (nextScale / scale - 1);
                 offsetY -= (midY - offsetY) * (nextScale / scale - 1);
+                
                 scale = nextScale; lastDist = dist;
                 updateTransform();
             } else if (isPanning) {
-                offsetX += (e.touches[0].pageX - lastX);
-                offsetY += (e.touches[0].pageY - lastY);
+                offsetX += (e.touches[0].pageX - lastX) * 0.4; // Замедленная камера
+                offsetY += (e.touches[0].pageY - lastY) * 0.4;
                 lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
                 updateTransform();
             }
@@ -149,7 +164,8 @@
             v.style.boxShadow = `0 0 15px ${color}`;
             v.innerHTML = `<div class="comet-shield"></div><div class="comet-tail" style="--c:${color}"></div>`;
             b.visual = v; view.appendChild(v);
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*2.5, y: Math.sin(cometPending.angle)*2.5 });
+            // Скорость пролета через экран за 24 часа (крайне низкая)
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*0.005, y: Math.sin(cometPending.angle)*0.005 });
             Composite.add(engine.world, b);
             document.getElementById('aim-ui').style.display = 'none';
             cometPending = null;
@@ -168,9 +184,8 @@
         });
 
         function updateTransform() {
-            // Ограничиваем камеру, чтобы не улетала в бесконечность
-            offsetX = Math.min(WORLD_LIMIT, Math.max(-WORLD_LIMIT, offsetX));
-            offsetY = Math.min(WORLD_LIMIT, Math.max(-WORLD_LIMIT, offsetY));
+            offsetX = Math.min(WORLD_LIMIT*scale, Math.max(-WORLD_LIMIT*scale, offsetX));
+            offsetY = Math.min(WORLD_LIMIT*scale, Math.max(-WORLD_LIMIT*scale, offsetY));
 
             view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
             const aim = document.getElementById('aim-ui');
@@ -179,10 +194,11 @@
                 aim.style.top = (cometPending.wy * scale + offsetY) + 'px';
             }
             
+            // Зум-индикатор из центра
             const zPct = ((scale - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
             document.getElementById('zoom-indicator').style.width = zPct + '%';
             
-            // Мини-карта: инвертируем позицию для отображения "где мы"
+            // Мини-карта
             let mX = 50 - (offsetX / 100);
             let mY = 50 - (offsetY / 100);
             document.getElementById('minimap-point').style.left = Math.max(0, Math.min(100, mX)) + '%';
