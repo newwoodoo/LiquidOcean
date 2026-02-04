@@ -153,5 +153,51 @@
             if (!cometPending) return;
             const b = Bodies.circle(cometPending.wx, cometPending.wy, 6, { frictionAir: 0 });
             const v = document.createElement('div'); v.className = 'obj';
-            v.style.width = '10px';
+            v.style.width = '10px'; v.style.height = '10px'; v.style.background = '#0ff';
+            v.style.boxShadow = '0 0 15px #0ff';
+            b.visual = v; view.appendChild(v);
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*5, y: Math.sin(cometPending.angle)*5 });
+            Composite.add(engine.world, b);
+            document.getElementById('aim-ui').style.display = 'none'; cometPending = null;
+        }
+
+        function updateTransform() {
+            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            document.getElementById('zoom-indicator').style.width = ((scale - 0.05) / 0.75) * 100 + '%';
             
+            // Мини-карта
+            document.getElementById('minimap-point').style.left = 50 - (offsetX - window.innerWidth/2)/200 + '%';
+            document.getElementById('minimap-point').style.top = 50 - (offsetY - window.innerHeight/2)/200 + '%';
+
+            // Динамика объектов
+            document.querySelectorAll('.p-3').forEach(el => {
+                el.querySelector('.rays-wrap').style.display = scale > 0.3 ? 'block' : 'none';
+                el.querySelectorAll('.far-ray').forEach(r => {
+                    r.style.display = scale <= 0.3 ? 'block' : 'none';
+                    r.style.opacity = (0.3 - scale) * 3;
+                });
+                el.style.animation = scale < 0.2 ? 'starBlink 0.5s infinite alternate' : 'none';
+            });
+
+            document.querySelectorAll('.p-10').forEach(el => {
+                const heavy = el.querySelector('.belt-wrap');
+                const line = el.querySelector('.belt-static');
+                heavy.style.display = scale > 0.4 ? 'block' : 'none';
+                if (scale > 0.4) heavy.style.animation = 'rotateBelt 10s linear infinite';
+                line.style.display = scale <= 0.4 ? 'block' : 'none';
+                line.style.borderWidth = scale < 0.15 ? '1px' : '4px';
+            });
+        }
+
+        Events.on(engine, 'afterUpdate', () => {
+            Composite.allBodies(engine.world).forEach(b => {
+                if (b.visual) {
+                    b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
+                }
+            });
+        });
+
+        updateTransform();
+    </script>
+</body>
+</html>
