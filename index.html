@@ -11,22 +11,21 @@
         
         #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; pointer-events: none; }
         #zoom-bar { width: 80px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 5px; border-radius: 3px; position: relative; overflow: hidden; border: 1px solid #333; }
-        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; width: 0%; transition: width 0.1s; }
+        #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; width: 0%; }
         #minimap { width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #444; border-radius: 4px; position: relative; overflow: hidden; }
-        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px #ff0; }
+        #minimap-point { position: absolute; width: 6px; height: 6px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px #ff0; z-index: 10; }
 
         .ui-panel { position: absolute; bottom: 0; width: 100%; height: 100px; background: #111; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 10001; border-top: 1px solid #333; padding-bottom: env(safe-area-inset-bottom); }
-        .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; }
+        .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
 
         .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
         
+        /* Лучи теперь создаются через JS корректно */
         .ray { 
-            position: absolute; top: 50%; left: 50%; width: 2px; height: 40px; 
-            background: linear-gradient(to top, #fff, transparent); 
-            transform-origin: bottom center; 
-            animation: rayPulse 1.5s infinite alternate;
+            position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); 
+            transform-origin: 50% 100%; animation: rayPulse 1.5s infinite alternate;
         }
-        @keyframes rayPulse { from { opacity: 0.2; transform: translate(-50%, -100%) scaleY(0.7); } to { opacity: 0.6; transform: translate(-50%, -100%) scaleY(1.1); } }
+        @keyframes rayPulse { from { opacity: 0.2; height: 30px; } to { opacity: 0.6; height: 50px; } }
 
         .comet-v { position: absolute; width: 16px; height: 16px; background: #fff; border-radius: 50%; z-index: 999; }
         .comet-shield { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 32px; height: 14px; border-radius: 32px 32px 0 0; background: radial-gradient(ellipse at bottom, rgba(255,255,255,0.5), transparent 80%); }
@@ -60,7 +59,7 @@
         let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0, cometPending = null;
 
         const MIN_ZOOM = 0.05, MAX_ZOOM = 0.5;
-        const PAN_SPEED = 0.02; // Замедление в 50 раз
+        const WORLD_LIMIT = 5000; // Мир 10к на 10к пикселей (примерно 10 экранов)
 
         function initDrag(e, type, price) {
             e.stopPropagation();
@@ -85,20 +84,15 @@
                 const t1 = e.touches[0], t2 = e.touches[1];
                 const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
                 const midX = (t1.pageX + t2.pageX) / 2, midY = (t1.pageY + t2.pageY) / 2;
-                
                 const delta = dist / lastDist;
                 const nextScale = Math.min(Math.max(scale * delta, MIN_ZOOM), MAX_ZOOM);
-                
-                // Зум ровно под пальцами
                 offsetX -= (midX - offsetX) * (nextScale / scale - 1);
                 offsetY -= (midY - offsetY) * (nextScale / scale - 1);
-                
                 scale = nextScale; lastDist = dist;
                 updateTransform();
             } else if (isPanning) {
-                // Плавное движение (замедленное)
-                offsetX += (e.touches[0].pageX - lastX) * PAN_SPEED;
-                offsetY += (e.touches[0].pageY - lastY) * PAN_SPEED;
+                offsetX += (e.touches[0].pageX - lastX);
+                offsetY += (e.touches[0].pageY - lastY);
                 lastX = e.touches[0].pageX; lastY = e.touches[0].pageY;
                 updateTransform();
             }
@@ -107,7 +101,7 @@
                 const dy = e.touches[0].pageY - (cometPending.wy * scale + offsetY);
                 cometPending.angle = Math.atan2(dy, dx);
             }
-        });
+        }, { passive: false });
 
         window.addEventListener('touchend', () => {
             if (activeDrag && activeDrag.active) {
@@ -150,11 +144,12 @@
             if (!cometPending) return;
             const b = Bodies.circle(cometPending.wx, cometPending.wy, 8, { frictionAir: 0, restitution: 0.9, label: 'comet' });
             const v = document.createElement('div'); v.className = 'comet-v';
-            const color = ['#ff4500', '#00d4ff', '#2ecc71', '#f1c40f'][Math.floor(Math.random()*4)];
+            const colors = ['#ff4500', '#00d4ff', '#2ecc71', '#f1c40f'];
+            const color = colors[Math.floor(Math.random()*4)];
             v.style.boxShadow = `0 0 15px ${color}`;
             v.innerHTML = `<div class="comet-shield"></div><div class="comet-tail" style="--c:${color}"></div>`;
             b.visual = v; view.appendChild(v);
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*6, y: Math.sin(cometPending.angle)*6 });
+            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*2.5, y: Math.sin(cometPending.angle)*2.5 });
             Composite.add(engine.world, b);
             document.getElementById('aim-ui').style.display = 'none';
             cometPending = null;
@@ -173,20 +168,25 @@
         });
 
         function updateTransform() {
+            // Ограничиваем камеру, чтобы не улетала в бесконечность
+            offsetX = Math.min(WORLD_LIMIT, Math.max(-WORLD_LIMIT, offsetX));
+            offsetY = Math.min(WORLD_LIMIT, Math.max(-WORLD_LIMIT, offsetY));
+
             view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
             const aim = document.getElementById('aim-ui');
             if(cometPending) {
                 aim.style.left = (cometPending.wx * scale + offsetX) + 'px';
                 aim.style.top = (cometPending.wy * scale + offsetY) + 'px';
             }
-            // Шкала зума
+            
             const zPct = ((scale - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
             document.getElementById('zoom-indicator').style.width = zPct + '%';
-            // Ограничение точки на мини-карте
-            let mX = 50 - (offsetX / (100 * scale));
-            let mY = 50 - (offsetY / (100 * scale));
-            document.getElementById('minimap-point').style.left = Math.max(5, Math.min(95, mX)) + '%';
-            document.getElementById('minimap-point').style.top = Math.max(5, Math.min(95, mY)) + '%';
+            
+            // Мини-карта: инвертируем позицию для отображения "где мы"
+            let mX = 50 - (offsetX / 100);
+            let mY = 50 - (offsetY / 100);
+            document.getElementById('minimap-point').style.left = Math.max(0, Math.min(100, mX)) + '%';
+            document.getElementById('minimap-point').style.top = Math.max(0, Math.min(100, mY)) + '%';
         }
 
         updateTransform();
