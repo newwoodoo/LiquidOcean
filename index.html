@@ -9,40 +9,37 @@
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #viewport { position: absolute; width: 100%; height: 100%; transform-origin: 0 0; }
         
-        #ui-container { position: absolute; top: 20px; left: 20px; z-index: 10000; }
-        #zoom-bar { width: 100px; height: 6px; background: rgba(255,255,255,0.1); margin-bottom: 8px; border-radius: 3px; border: 1px solid #333; position: relative; overflow: hidden; }
+        #ui-top { position: absolute; top: 20px; left: 20px; z-index: 10000; }
+        #zoom-bar { width: 100px; height: 4px; background: rgba(255,255,255,0.1); margin-bottom: 8px; border-radius: 2px; position: relative; overflow: hidden; }
         #zoom-indicator { position: absolute; height: 100%; background: #f1c40f; left: 50%; width: 0%; transform: translateX(-50%); }
+        #minimap { width: 80px; height: 80px; background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 4px; position: relative; }
+        #minimap-point { position: absolute; width: 4px; height: 4px; background: #ff0; border-radius: 50%; transform: translate(-50%, -50%); }
 
         .ui-panel { position: absolute; bottom: 0; width: 100%; height: 100px; background: #111; display: flex; justify-content: center; align-items: center; gap: 15px; z-index: 10001; border-top: 1px solid #333; padding-bottom: env(safe-area-inset-bottom); }
         .btn { width: 55px; height: 55px; border-radius: 15px; background: #222; border: 1px solid #444; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
 
         .obj { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
         
-        /* Звезда $3: Вращающиеся лучи */
-        .ray-3 { position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); transform-origin: 50% 100%; animation: rayRotate 4s linear infinite; }
-        @keyframes rayRotate { from { transform: translate(-50%, -100%) rotate(0deg); } to { transform: translate(-50%, -100%) rotate(360deg); } }
-        .blink-3 { position: absolute; width: 100%; height: 100%; border-radius: 50%; background: #fff; box-shadow: 0 0 30px #fff; animation: starBlink 1s ease-in-out infinite alternate; }
-        @keyframes starBlink { from { transform: scale(0.8); opacity: 0.5; } to { transform: scale(1.2); opacity: 1; } }
+        /* Звезда $3 */
+        .ray-long { position: absolute; top: 50%; left: 50%; width: 2px; background: linear-gradient(to top, #fff, transparent); transform-origin: 50% 100%; animation: rayAnim 2s infinite alternate; }
+        @keyframes rayAnim { from { height: 20px; opacity: 0.3; } to { height: 60px; opacity: 0.7; } }
+        .far-ray { position: absolute; top: 50%; left: 50%; width: 3px; height: 100px; transform-origin: 50% 100%; filter: blur(2px); }
 
-        /* Звезда $10: Пояс */
-        .ring-10 { position: absolute; top: 50%; left: 50%; border: 4px double rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%) rotateX(75deg); }
-        .belt-10 { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform-style: preserve-3d; animation: rotateBelt 15s linear infinite; }
-        @keyframes rotateBelt { from { transform: translate(-50%, -50%) rotateX(75deg) rotateZ(0deg); } to { transform: translate(-50%, -50%) rotateX(75deg) rotateZ(360deg); } }
-        .ast { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 50%; }
-
-        /* Комета */
-        .comet-head { position: absolute; width: 10px; height: 10px; background: #fff; border-radius: 50%; box-shadow: 0 0 15px #00d4ff; }
-        .comet-tail { position: absolute; top: 5px; left: 50%; width: 15px; height: 80px; background: linear-gradient(to bottom, rgba(0,212,255,0.8), transparent); clip-path: polygon(15% 0, 85% 0, 100% 100%, 0 100%); transform: translateX(-50%); }
+        /* Звезда $10 */
+        .belt-wrap { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%) rotateX(75deg); }
+        .ast-heavy { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; }
+        .belt-static { position: absolute; width: 220%; height: 220%; border: 1px solid rgba(255,255,255,0.15); border-radius: 50%; top: -60%; left: -60%; }
 
         /* Прицел */
-        #aim-ui { position: absolute; width: 160px; height: 160px; border: 2px dashed rgba(255,255,255,0.2); border-radius: 50%; display: none; pointer-events: none; transform: translate(-50%, -50%); }
+        #aim-ui { position: absolute; width: 160px; height: 160px; border: 2px dashed rgba(255,255,255,0.2); border-radius: 50%; display: none; }
         .sec { position: absolute; width: 50%; height: 50%; left: 50%; top: 50%; transform-origin: 0 0; clip-path: polygon(0 0, 100% 0, 85% 35%, 0 0); }
-        .sec.act { background: rgba(241,196,15,0.6); box-shadow: 0 0 15px #f1c40f; }
+        .sec.act { background: rgba(241,196,15,0.6); }
     </style>
 </head>
 <body>
-    <div id="ui-container">
+    <div id="ui-top">
         <div id="zoom-bar"><div id="zoom-indicator"></div></div>
+        <div id="minimap"><div id="minimap-point"></div></div>
     </div>
     <div id="viewport"></div>
     <div id="aim-ui"></div>
@@ -63,14 +60,13 @@
         let scale = 0.2, offsetX = window.innerWidth/2, offsetY = window.innerHeight/2;
         let lastDist = 0, activeDrag = null, isPanning = false, lastX = 0, lastY = 0, cometPending = null;
 
-        const colors1 = ['#fff', '#0cf', '#f0f', '#0f0', '#ff0', '#f60', '#9cf'];
+        const colors1 = ['#fff', '#aef', '#f9f', '#9f9', '#ff9', '#f96', '#acf'];
 
-        // Инициализация прицела
-        const aimUI = document.getElementById('aim-ui');
+        // Прицел
         for(let i=0; i<16; i++) {
             let s = document.createElement('div'); s.className = 'sec';
             s.style.transform = `rotate(${i * 22.5 - 11.25}deg)`;
-            aimUI.appendChild(s);
+            document.getElementById('aim-ui').appendChild(s);
         }
 
         function initDrag(e, type, price) {
@@ -111,92 +107,51 @@
         });
 
         window.addEventListener('touchend', () => {
-            if (activeDrag && activeDrag.active) {
-                placeStar((activeDrag.x - offsetX) / scale, (activeDrag.y - offsetY) / scale, activeDrag.price);
-            }
+            if (activeDrag && activeDrag.active) placeStar((activeDrag.x-offsetX)/scale, (activeDrag.y-offsetY)/scale, activeDrag.price);
             activeDrag = null; isPanning = false;
         });
 
         function placeStar(x, y, p) {
-            const size = p === 1 ? 12 : (p === 3 ? 30 : 60);
+            const size = p === 1 ? 12 : (p === 3 ? 24 : 50);
             const b = Bodies.circle(x, y, size/2, { isStatic: true, label: 'star', price: p });
-            const v = document.createElement('div'); v.className = 'obj';
+            const v = document.createElement('div'); v.className = 'obj p-'+p;
             v.style.width = size+'px'; v.style.height = size+'px';
-            
+            v.style.background = '#fff';
+
             if (p === 1) {
-                const c = colors1[Math.floor(Math.random()*7)];
-                v.style.background = '#fff'; v.style.boxShadow = `0 0 15px ${c}`;
-                v.style.animation = `starBlink ${1 + Math.random()}s infinite alternate`;
+                v.style.boxShadow = `0 0 10px ${colors1[Math.floor(Math.random()*7)]}`;
             } else if (p === 3) {
-                v.innerHTML = '<div class="blink-3"></div>';
+                v.innerHTML = '<div class="rays-wrap"></div>';
+                const wrap = v.querySelector('.rays-wrap');
                 for(let i=0; i<8; i++) {
-                    let r = document.createElement('div'); r.className = 'ray-3';
+                    let r = document.createElement('div'); r.className = 'ray-long';
                     r.style.transform = `translate(-50%, -100%) rotate(${i*45}deg)`;
-                    r.style.animationDelay = -(i*0.5)+'s';
-                    v.appendChild(r);
+                    wrap.appendChild(r);
                 }
+                const far = ['#ff0', '#0ff', '#f0f'];
+                far.forEach((c, i) => {
+                    let fr = document.createElement('div'); fr.className = 'far-ray';
+                    fr.style.background = `linear-gradient(to top, ${c}, transparent)`;
+                    fr.style.transform = `translate(-50%, -100%) rotate(${i*120}deg)`;
+                    v.appendChild(fr);
+                });
             } else if (p === 10) {
-                v.style.background = '#fff';
-                let ring = document.createElement('div'); ring.className = 'ring-10';
-                ring.style.width = size*2.5+'px'; ring.style.height = size*2.5+'px';
-                let belt = document.createElement('div'); belt.className = 'belt-10';
-                for(let i=0; i<60; i++) {
-                    let a = document.createElement('div'); a.className = 'ast';
-                    let ang = i * (Math.PI * 2 / 60);
-                    a.style.left = 50 + 50 * Math.cos(ang) + '%';
-                    a.style.top = 50 + 50 * Math.sin(ang) + '%';
-                    belt.appendChild(a);
+                let w = document.createElement('div'); w.className = 'belt-wrap';
+                for(let i=0; i<80; i++) {
+                    let a = document.createElement('div'); a.className = 'ast-heavy';
+                    let ang = i * 0.08; let rad = 50 + Math.random()*10;
+                    a.style.left = 50 + rad * Math.cos(ang) + '%';
+                    a.style.top = 50 + rad * Math.sin(ang) + '%';
+                    w.appendChild(a);
                 }
-                v.appendChild(ring); v.appendChild(belt);
+                v.appendChild(w); v.appendChild(document.createElement('div')).className = 'belt-static';
             }
             b.visual = v; view.appendChild(v); Composite.add(engine.world, b);
         }
 
-        function prepareComet(x, y) {
-            cometPending = { wx: x, wy: y, angle: 0 };
-            aimUI.style.display = 'block';
-            updateTransform();
-        }
-
         function confirmLaunch() {
             if (!cometPending) return;
-            const b = Bodies.circle(cometPending.wx, cometPending.wy, 8, { frictionAir: 0, label: 'comet' });
+            const b = Bodies.circle(cometPending.wx, cometPending.wy, 6, { frictionAir: 0 });
             const v = document.createElement('div'); v.className = 'obj';
-            v.innerHTML = '<div class="comet-head"></div><div class="comet-tail"></div>';
-            b.visual = v; view.appendChild(v);
-            Body.setVelocity(b, { x: Math.cos(cometPending.angle)*4, y: Math.sin(cometPending.angle)*4 });
-            Composite.add(engine.world, b);
-            aimUI.style.display = 'none'; cometPending = null;
-        }
-
-        function updateTransform() {
-            view.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-            if(cometPending) {
-                aimUI.style.left = (cometPending.wx * scale + offsetX) + 'px';
-                aimUI.style.top = (cometPending.wy * scale + offsetY) + 'px';
-                aimUI.style.transform = `translate(-50%, -50%) scale(${1/scale * 0.2})`;
-            }
-            document.getElementById('zoom-indicator').style.width = ((scale - 0.05) / 0.75) * 100 + '%';
+            v.style.width = '10px';
             
-            // Динамический вид для за 10
-            document.querySelectorAll('.ring-10').forEach(r => r.style.opacity = scale < 0.15 ? "1" : "0.3");
-            document.querySelectorAll('.belt-10').forEach(b => b.style.opacity = scale < 0.15 ? "0" : "1");
-        }
-
-        Events.on(engine, 'afterUpdate', () => {
-            Composite.allBodies(engine.world).forEach(b => {
-                if (b.visual) {
-                    b.visual.style.left = b.position.x + 'px'; b.visual.style.top = b.position.y + 'px';
-                    if (b.label === 'comet') {
-                        const rot = Math.atan2(b.velocity.y, b.velocity.x) + Math.PI/2;
-                        b.visual.style.transform = `translate(-50%, -50%) rotate(${rot}rad)`;
-                    }
-                }
-            });
-        });
-
-        updateTransform();
-        window.Telegram.WebApp.ready();
-    </script>
-</body>
-</html>
