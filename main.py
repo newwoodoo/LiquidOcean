@@ -7,7 +7,6 @@ from PIL import Image, ImageDraw
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = "@ваш_канал"
 
-# Границы карты в координатах GPS (настроены под предоставленную карту)
 MIN_LON, MAX_LON = 32.4, 36.7 
 MIN_LAT, MAX_LAT = 44.3, 46.25
 
@@ -96,6 +95,17 @@ async def listen_channel(message: Message):
         for kw, coords in GPS_MAP.items():
             if kw in text:
                 found_points.add(coords)
+
+@dp.message(F.text.startswith("/test"))
+async def cmd_test(message: Message):
+    text = message.text.lower()
+    if "тревога по бпла" in text:
+        for kw, coords in GPS_MAP.items():
+            if kw in text:
+                found_points.add(coords)
+        await message.answer("Тестовые точки добавлены. Напиши /map")
+    else:
+        await message.answer("В команде нет фразы 'тревога по бпла'.")
 
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message):
