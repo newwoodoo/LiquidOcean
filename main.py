@@ -87,8 +87,8 @@ def draw_points_on_map(points_gps):
 
 def get_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Показать карту", callback_data="show_map")],
-        [InlineKeyboardButton(text="🗑 Очистить", callback_data="clear_map")]
+        [InlineKeyboardButton(text="🗺 Обновить карту", callback_data="show_map")],
+        [InlineKeyboardButton(text="🗑 Очистить карту", callback_data="clear_map")]
     ])
 
 @dp.channel_post()
@@ -103,7 +103,12 @@ async def listen_channel(message: Message):
 
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message):
-    await message.answer("Бот запущен. Ожидание тревог...", reply_markup=get_keyboard())
+    if not os.path.exists("static_map.png"):
+        await message.answer("Ошибка: нет файла static_map.png")
+        return
+    
+    photo = FSInputFile("static_map.png")
+    await message.answer_photo(photo, caption="🟢 Обстановка спокойная. Ожидание тревог...", reply_markup=get_keyboard())
 
 @dp.callback_query(F.data == "show_map")
 async def cb_show_map(callback: CallbackQuery):
@@ -113,19 +118,25 @@ async def cb_show_map(callback: CallbackQuery):
 
     if found_points:
         draw_points_on_map(found_points)
-        await callback.message.answer_photo(FSInputFile("result_map.png"), reply_markup=get_keyboard())
+        photo = FSInputFile("result_map.png")
+        caption = "🔴 Тревога по БПЛА!"
     else:
-        await callback.answer("Новых тревог нет.", show_alert=True)
+        photo = FSInputFile("static_map.png")
+        caption = "🟢 Обстановка спокойная. Новых тревог нет."
+
+    await callback.message.answer_photo(photo, caption=caption, reply_markup=get_keyboard())
     await callback.answer()
 
 @dp.callback_query(F.data == "clear_map")
 async def cb_clear_map(callback: CallbackQuery):
     found_points.clear()
-    await callback.answer("Карта очищена!", show_alert=True)
+    photo = FSInputFile("static_map.png")
+    await callback.message.answer_photo(photo, caption="🟢 Карта очищена. Обстановка спокойная.", reply_markup=get_keyboard())
+    await callback.answer()
 
 async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-        
+    
