@@ -1,11 +1,10 @@
 import os
 import asyncio
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = "@ваш_канал"
 
 MIN_LON, MAX_LON = 32.4, 36.7 
 MIN_LAT, MAX_LAT = 44.3, 46.25
@@ -86,6 +85,12 @@ def draw_points_on_map(points_gps):
         
     image.convert("RGB").save("result_map.png")
 
+def get_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗺 Показать карту", callback_data="show_map")],
+        [InlineKeyboardButton(text="🗑 Очистить", callback_data="clear_map")]
+    ])
+
 @dp.channel_post()
 async def listen_channel(message: Message):
     if not message.text:
@@ -96,37 +101,31 @@ async def listen_channel(message: Message):
             if kw in text:
                 found_points.add(coords)
 
-@dp.message(F.text.startswith("/test"))
-async def cmd_test(message: Message):
-    text = message.text.lower()
-    if "тревога по бпла" in text:
-        for kw, coords in GPS_MAP.items():
-            if kw in text:
-                found_points.add(coords)
-        await message.answer("Тестовые точки добавлены. Напиши /map")
-    else:
-        await message.answer("В команде нет фразы 'тревога по бпла'.")
-
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message):
-    await message.answer("Бот работает. Жду сообщения 'Тревога по БПЛА'...")
+    await message.answer("Бот запущен. Ожидание тревог...", reply_markup=get_keyboard())
 
-@dp.message(F.text == "/map")
-async def send_map(message: Message):
+@dp.callback_query(F.data == "show_map")
+async def cb_show_map(callback: CallbackQuery):
     if not os.path.exists("static_map.png"):
-        await message.answer("Нет файла static_map.png")
+        await callback.answer("Ошибка: нет файла static_map.png", show_alert=True)
         return
 
     if found_points:
         draw_points_on_map(found_points)
-        await message.answer_photo(FSInputFile("result_map.png"), caption="📍 Тревога по БПЛА")
-        found_points.clear()
+        await callback.message.answer_photo(FSInputFile("result_map.png"), reply_markup=get_keyboard())
     else:
-        await message.answer("Нет новых тревог.")
+        await callback.answer("Новых тревог нет.", show_alert=True)
+    await callback.answer()
+
+@dp.callback_query(F.data == "clear_map")
+async def cb_clear_map(callback: CallbackQuery):
+    found_points.clear()
+    await callback.answer("Карта очищена!", show_alert=True)
 
 async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
+        
