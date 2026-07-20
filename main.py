@@ -1,10 +1,13 @@
+```python
 import os
 import asyncio
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from PIL import Image, ImageDraw
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Укажи ссылку на свой мини-сайт (Web App) или оставь заглушку
+WEB_APP_URL = "https://example.com" 
 
 MIN_LON, MAX_LON = 32.4, 36.7 
 MIN_LAT, MAX_LAT = 44.3, 46.25
@@ -85,10 +88,11 @@ def draw_points_on_map(points_gps):
         
     image.convert("RGB").save("result_map.png")
 
-def get_keyboard():
+def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Обновить карту", callback_data="show_map")],
-        [InlineKeyboardButton(text="🗑 Очистить карту", callback_data="clear_map")]
+        [InlineKeyboardButton(text="🗺 Открыть карту", callback_data="show_map")],
+        [InlineKeyboardButton(text="📱 Web App (Интерфейс)", web_app=WebAppInfo(url=WEB_APP_URL))],
+        [InlineKeyboardButton(text="🗑 Сбросить тревоги", callback_data="clear_map")]
     ])
 
 @dp.channel_post()
@@ -108,7 +112,11 @@ async def cmd_start(message: Message):
         return
     
     photo = FSInputFile("static_map.png")
-    await message.answer_photo(photo, caption="🟢 Обстановка спокойная. Ожидание тревог...", reply_markup=get_keyboard())
+    await message.answer_photo(
+        photo, 
+        caption="🛡 Панель управления мониторингом\n\nВыберите действие с помощью кнопок ниже:", 
+        reply_markup=get_main_menu()
+    )
 
 @dp.callback_query(F.data == "show_map")
 async def cb_show_map(callback: CallbackQuery):
@@ -119,19 +127,19 @@ async def cb_show_map(callback: CallbackQuery):
     if found_points:
         draw_points_on_map(found_points)
         photo = FSInputFile("result_map.png")
-        caption = "🔴 Тревога по БПЛА!"
+        caption = "🔴 Активные тревоги на карте:"
     else:
         photo = FSInputFile("static_map.png")
-        caption = "🟢 Обстановка спокойная. Новых тревог нет."
+        caption = "🟢 Обстановка спокойная. Активных тревог нет."
 
-    await callback.message.answer_photo(photo, caption=caption, reply_markup=get_keyboard())
+    await callback.message.answer_photo(photo, caption=caption, reply_markup=get_main_menu())
     await callback.answer()
 
 @dp.callback_query(F.data == "clear_map")
 async def cb_clear_map(callback: CallbackQuery):
     found_points.clear()
     photo = FSInputFile("static_map.png")
-    await callback.message.answer_photo(photo, caption="🟢 Карта очищена. Обстановка спокойная.", reply_markup=get_keyboard())
+    await callback.message.answer_photo(photo, caption="🟢 Все тревоги сброшены. Карта чиста.", reply_markup=get_main_menu())
     await callback.answer()
 
 async def main():
@@ -139,4 +147,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
+
+```
