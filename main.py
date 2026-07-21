@@ -94,42 +94,47 @@ def get_keyboard():
         [InlineKeyboardButton(text="🗑 Очистить", callback_data="clear")]
     ])
 
-@dp.channel_post()
-async def listen_channel(message: Message):
+@dp.message()
+async def handle_any_message(message: Message):
     if not message.text:
         return
     text = message.text.lower()
+    
+    if text in ["/start", "/map"]:
+        if not os.path.exists("static_map.png"):
+            await message.answer("Ошибка: нет файла static_map.png")
+            return
+
+        draw_map()
+        img = "result_map.png" if found_points else "static_map.png"
+        caption = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
+        
+        await message.answer_photo(FSInputFile(img), caption=caption, reply_markup=get_keyboard())
+        return
+
     if "тревога по бпла" in text:
+        added = False
         for kw, coords in GPS_MAP.items():
             if kw in text:
                 found_points.add(coords)
-
-@dp.message(F.text.in_({"/start", "/map"}))
-async def cmd_interface(message: Message):
-    if not os.path.exists("static_map.png"):
-        await message.answer("Ошибка: нет файла static_map.png")
-        return
-
-    draw_map()
-    img = "result_map.png" if found_points else "static_map.png"
-    text = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
-    
-    await message.answer_photo(FSInputFile(img), caption=text, reply_markup=get_keyboard())
+                added = True
+        if added:
+            await message.answer(f"Добавлено точек. Всего: {len(found_points)}")
 
 @dp.callback_query(F.data == "refresh")
 async def cb_refresh(callback: CallbackQuery):
     draw_map()
     img = "result_map.png" if found_points else "static_map.png"
-    text = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
+    caption = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
     
     try:
         from aiogram.types import InputMediaPhoto
         await callback.message.edit_media(
-            media=InputMediaPhoto(media=FSInputFile(img), caption=text),
+            media=InputMediaPhoto(media=FSInputFile(img), caption=caption),
             reply_markup=get_keyboard()
         )
     except Exception:
-        await callback.message.answer_photo(FSInputFile(img), caption=text, reply_markup=get_keyboard())
+        await callback.message.answer_photo(FSInputFile(img), caption=caption, reply_markup=get_keyboard())
     
     await callback.answer("Обновлено!")
 
@@ -157,4 +162,3 @@ if __name__ == "__main__":
     asyncio.run(main())
 
 ```
-
