@@ -6,7 +6,6 @@ from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMar
 from PIL import Image, ImageDraw
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Укажи ссылку на свой мини-сайт (Web App) или оставь заглушку
 WEB_APP_URL = "https://example.com" 
 
 MIN_LON, MAX_LON = 32.4, 36.7 
@@ -90,8 +89,7 @@ def draw_points_on_map(points_gps):
 
 def get_main_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Открыть карту", callback_data="show_map")],
-        [InlineKeyboardButton(text="📱 Web App (Интерфейс)", web_app=WebAppInfo(url=WEB_APP_URL))],
+        [InlineKeyboardButton(text="🗺 Обновить карту", callback_data="show_map")],
         [InlineKeyboardButton(text="🗑 Сбросить тревоги", callback_data="clear_map")]
     ])
 
@@ -114,7 +112,7 @@ async def cmd_start(message: Message):
     photo = FSInputFile("static_map.png")
     await message.answer_photo(
         photo, 
-        caption="🛡 Панель управления мониторингом\n\nВыберите действие с помощью кнопок ниже:", 
+        caption="🟢 Обстановка спокойная. Новых тревог нет.", 
         reply_markup=get_main_menu()
     )
 
@@ -125,22 +123,50 @@ async def cb_show_map(callback: CallbackQuery):
         return
 
     if found_points:
-        draw_points_on_map(found_points)
-        photo = FSInputFile("result_map.png")
-        caption = "🔴 Активные тревоги на карте:"
+        draw_points_on_update = True
+        try:
+            draw_points_on_map(found_points)
+            photo = FSInputFile("result_map.png")
+            caption = f"🔴 Активные тревоги ({len(found_points)}):"
+        except Exception:
+            draw_points_on_update = False
+        
+        if not draw_points_on_update:
+            photo = FSInputFile("static_map.png")
+            caption = "🔴 Тревога активна, но ошибка отрисовки."
     else:
         photo = FSInputFile("static_map.png")
-        caption = "🟢 Обстановка спокойная. Активных тревог нет."
+        caption = "🟢 Обстановка спокойная. Новых тревог нет."
 
-    await callback.message.answer_photo(photo, caption=caption, reply_markup=get_main_menu())
+    # Используем edit_message_media, чтобы картинка обновлялась прямо в том же сообщении, не создавая новых
+    try:
+        from aiogram.types import InputMediaPhoto
+        await callback.message.edit_media(
+            media=InputMediaPhoto(media=photo, caption=caption),
+            reply_markup=get_main_menu()
+        )
+    except Exception:
+        # Если вдруг Телеграм ругнется на одинаковый файл, отправим заново
+        await callback.message.answer_photo(photo, caption=caption, reply_markup=get_main_menu())
+        
     await callback.answer()
 
 @dp.callback_query(F.data == "clear_map")
 async def cb_clear_map(callback: CallbackQuery):
     found_points.clear()
     photo = FSInputFile("static_map.png")
-    await callback.message.answer_photo(photo, caption="🟢 Все тревоги сброшены. Карта чиста.", reply_markup=get_main_menu())
-    await callback.answer()
+    caption = "🟢 Карта очищена. Обстановка спокойная."
+    
+    try:
+        from aiogram.types import InputMediaPhoto
+        await callback.message.edit_media(
+            media=InputMediaPhoto(media=photo, caption=caption),
+            reply_markup=get_main_menu()
+        )
+    except Exception:
+        await callback.message.answer_photo(photo, caption=caption, reply_markup=get_main_menu())
+        
+    await callback.answer("Тревоги сброшены!", show_alert=True)
 
 async def main():
     await dp.start_polling(bot)
