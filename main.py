@@ -1,12 +1,10 @@
-```python
 import os
 import asyncio
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from PIL import Image, ImageDraw
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEB_APP_URL = "https://example.com" 
 
 MIN_LON, MAX_LON = 32.4, 36.7 
 MIN_LAT, MAX_LAT = 44.3, 46.25
@@ -79,12 +77,10 @@ def draw_points_on_map(points_gps):
     image = Image.open("static_map.png").convert("RGBA")
     draw = ImageDraw.Draw(image)
     w, h = image.size
-    
     for lon, lat in points_gps:
         x, y = get_pixel_coords(lon, lat, w, h)
         draw.ellipse((x - 12, y - 12, x + 12, y + 12), fill="red", outline="white", width=2)
         draw.line((x, y, x + 35, y - 35), fill="red", width=5)
-        
     image.convert("RGB").save("result_map.png")
 
 def get_main_menu():
@@ -106,7 +102,7 @@ async def listen_channel(message: Message):
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message):
     if not os.path.exists("static_map.png"):
-        await message.answer("Ошибка: нет файла static_map.png")
+        await message.answer("Ошибка: нет файла static_map.png в репозитории!")
         return
     
     photo = FSInputFile("static_map.png")
@@ -123,30 +119,23 @@ async def cb_show_map(callback: CallbackQuery):
         return
 
     if found_points:
-        draw_points_on_update = True
         try:
             draw_points_on_map(found_points)
             photo = FSInputFile("result_map.png")
             caption = f"🔴 Активные тревоги ({len(found_points)}):"
         except Exception:
-            draw_points_on_update = False
-        
-        if not draw_points_on_update:
             photo = FSInputFile("static_map.png")
-            caption = "🔴 Тревога активна, но ошибка отрисовки."
+            caption = "🔴 Ошибка отрисовки точек."
     else:
         photo = FSInputFile("static_map.png")
         caption = "🟢 Обстановка спокойная. Новых тревог нет."
 
-    # Используем edit_message_media, чтобы картинка обновлялась прямо в том же сообщении, не создавая новых
     try:
-        from aiogram.types import InputMediaPhoto
         await callback.message.edit_media(
             media=InputMediaPhoto(media=photo, caption=caption),
             reply_markup=get_main_menu()
         )
     except Exception:
-        # Если вдруг Телеграм ругнется на одинаковый файл, отправим заново
         await callback.message.answer_photo(photo, caption=caption, reply_markup=get_main_menu())
         
     await callback.answer()
@@ -158,7 +147,6 @@ async def cb_clear_map(callback: CallbackQuery):
     caption = "🟢 Карта очищена. Обстановка спокойная."
     
     try:
-        from aiogram.types import InputMediaPhoto
         await callback.message.edit_media(
             media=InputMediaPhoto(media=photo, caption=caption),
             reply_markup=get_main_menu()
@@ -169,9 +157,10 @@ async def cb_clear_map(callback: CallbackQuery):
     await callback.answer("Тревоги сброшены!", show_alert=True)
 
 async def main():
+    # Очищаем старые обновления, чтобы бот не падал при старте
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-```
+    
