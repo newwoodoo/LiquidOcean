@@ -1,8 +1,8 @@
+```python
 import os
 import asyncio
-import base64
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from PIL import Image, ImageDraw
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -74,17 +74,25 @@ def get_pixel_coords(lon, lat, width, height):
     y = int(height - (lat - MIN_LAT) / (MAX_LAT - MIN_LAT) * height)
     return x, y
 
-def draw_points_on_map(points_gps):
+def draw_map():
     if not os.path.exists("static_map.png"):
         return
     image = Image.open("static_map.png").convert("RGBA")
     draw = ImageDraw.Draw(image)
     w, h = image.size
-    for lon, lat in points_gps:
+    
+    for lon, lat in found_points:
         x, y = get_pixel_coords(lon, lat, w, h)
         draw.ellipse((x - 12, y - 12, x + 12, y + 12), fill="red", outline="white", width=2)
         draw.line((x, y, x + 35, y - 35), fill="red", width=5)
+        
     image.convert("RGB").save("result_map.png")
+
+def get_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗺 Обновить карту", callback_data="refresh")],
+        [InlineKeyboardButton(text="🗑 Очистить", callback_data="clear")]
+    ])
 
 @dp.channel_post()
 async def listen_channel(message: Message):
@@ -96,58 +104,50 @@ async def listen_channel(message: Message):
             if kw in text:
                 found_points.add(coords)
 
-@dp.message(F.text == "/start")
-async def cmd_start(message: Message):
-    # Генерируем картинку с учетом текущих точек
-    if found_points:
-        draw_points_on_map(found_points)
-        img_path = "result_map.png"
-    else:
-        img_path = "static_map.png"
-
-    if not os.path.exists(img_path):
+@dp.message(F.text.in_({"/start", "/map"}))
+async def cmd_interface(message: Message):
+    if not os.path.exists("static_map.png"):
         await message.answer("Ошибка: нет файла static_map.png")
         return
 
-    # Зашиваем картинку прямо в код кнопки без всяких хостингов
-    with open(img_path, "rb") as f:
-        encoded_img = base64.b64encode(f.read()).decode("utf-8")
-
-    html_code = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }}
-            img {{ width: 100%; height: 100%; object-fit: contain; }}
-        </style>
-    </head>
-    <body>
-        <img src="data:image/png;base64,{encoded_img}">
-    </body>
-    </html>
-    """
+    draw_map()
+    img = "result_map.png" if found_points else "static_map.png"
+    text = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
     
-    # Создаем виртуальную ссылочку прямо в оперативной памяти бота
-    webapp_data = "data:text/html;charset=utf-8," + base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
+    await message.answer_photo(FSInputFile(img), caption=text, reply_markup=get_keyboard())
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📱 Открыть карту на весь экран", web_app=WebAppInfo(url=webapp_data))],
-        [InlineKeyboardButton(text="🗑 Сбросить тревоги", callback_data="clear")]
-    ])
-
-    status = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
-    photo = FSInputFile(img_path)
-    await message.answer_photo(photo, caption=status, reply_markup=keyboard)
+@dp.callback_query(F.data == "refresh")
+async def cb_refresh(callback: CallbackQuery):
+    draw_map()
+    img = "result_map.png" if found_points else "static_map.png"
+    text = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
+    
+    try:
+        from aiogram.types import InputMediaPhoto
+        await callback.message.edit_media(
+            media=InputMediaPhoto(media=FSInputFile(img), caption=text),
+            reply_markup=get_keyboard()
+        )
+    except Exception:
+        await callback.message.answer_photo(FSInputFile(img), caption=text, reply_markup=get_keyboard())
+    
+    await callback.answer("Обновлено!")
 
 @dp.callback_query(F.data == "clear")
 async def cb_clear(callback: CallbackQuery):
     found_points.clear()
-    await callback.answer("Тревоги сброшены!", show_alert=True)
-    # Переоткрываем со стартовым сообщением
-    await cmd_start(callback.message)
+    draw_map()
+    
+    try:
+        from aiogram.types import InputMediaPhoto
+        await callback.message.edit_media(
+            media=InputMediaPhoto(media=FSInputFile("static_map.png"), caption="🟢 Обстановка спокойная"),
+            reply_markup=get_keyboard()
+        )
+    except Exception:
+        await callback.message.answer_photo(FSInputFile("static_map.png"), caption="🟢 Обстановка спокойная", reply_markup=get_keyboard())
+        
+    await callback.answer("Очищено!", show_alert=True)
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
@@ -155,4 +155,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
+
+```
+
