@@ -1,164 +1,30 @@
-```python
-import os
+
 import asyncio
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
-from PIL import Image, ImageDraw
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message, WebAppInfo
+from aiogram.filters import CommandStart
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-MIN_LON, MAX_LON = 32.4, 36.7 
-MIN_LAT, MAX_LAT = 44.3, 46.25
-
-GPS_MAP = {
-    "азовское": (34.82, 45.59), "ай-тодор": (34.11, 44.43), "акимовка": (34.80, 45.45),
-    "алупка": (34.04, 44.42), "алушта": (34.41, 44.67), "арабатский залив": (35.50, 45.40),
-    "аромат": (33.93, 44.57), "аю-даг": (34.33, 44.55), "багерово": (36.29, 45.37),
-    "бахчисарай": (33.86, 44.75), "безымянный": (34.61, 44.77), "белогорск": (34.60, 45.05),
-    "березовка": (33.56, 45.43), "богатое": (34.76, 45.02), "верхнесадовое": (33.69, 44.70),
-    "владиславовка": (35.37, 45.16), "войково": (36.39, 45.38), "воинка": (33.82, 45.86),
-    "воробьево": (33.24, 45.32), "воронки": (33.60, 45.60), "высокое": (33.94, 44.63),
-    "гаспра": (34.11, 44.43), "грушевка": (34.97, 45.02), "гурзуф": (34.28, 44.54),
-    "далекое": (32.95, 45.67), "джанкой": (34.39, 45.70), "дмитровка": (35.02, 45.32),
-    "добрушино": (33.40, 45.37), "дозорное": (33.09, 45.54), "евпатория": (33.36, 45.19),
-    "желябовка": (34.70, 45.39), "зайцево": (34.02, 45.11), "заозерное": (33.28, 45.15),
-    "заречное": (34.26, 44.84), "знаменское": (32.96, 45.30), "золотое": (36.08, 45.42),
-    "золотое поле": (34.98, 45.11), "инкерман": (33.60, 44.60), "ишунь": (33.79, 45.92),
-    "казантип": (35.84, 45.46), "казантипский залив": (35.90, 45.40), "каламитский залив": (33.40, 45.00),
-    "калиновка": (34.31, 45.74), "каменское": (35.52, 45.27), "каркинитский залив": (33.30, 45.80),
-    "кача": (33.54, 44.73), "керченский пролив": (36.60, 45.30), "керчь": (36.46, 45.35),
-    "киик-атлама": (35.38, 44.95), "кировское": (35.20, 45.22), "клепинино": (34.17, 45.52),
-    "коктебель": (35.24, 44.95), "колодезное": (34.27, 45.25), "кольчугино": (33.78, 44.93),
-    "кореиз": (34.08, 44.43), "котельниково": (34.09, 45.31), "красная поляна": (34.02, 45.48),
-    "красноармейское": (34.01, 45.40), "красновка": (34.16, 45.20), "красносельское": (32.96, 45.42),
-    "красноселовка": (34.66, 44.92), "красноярское": (32.88, 45.34), "крыловка": (33.56, 45.29),
-    "куйбышево": (33.86, 44.62), "кумово": (33.49, 45.76), "курортное": (35.19, 44.91),
-    "ленино": (35.77, 45.29), "ленинское": (35.93, 45.28), "ливадия": (34.14, 44.47),
-    "любимовка": (33.55, 44.66), "мазанка": (34.25, 45.00), "малый маяк": (34.36, 44.61),
-    "марфовка": (36.06, 45.20), "маслово": (34.50, 45.77), "массандра": (34.18, 44.50),
-    "меганом": (35.08, 44.80), "мирный": (33.03, 45.30), "молочное": (33.22, 45.19),
-    "морское": (34.80, 44.82), "мускатное": (34.34, 45.38), "мысовое": (35.83, 45.44),
-    "найденовка": (34.33, 45.28), "насыпное": (35.31, 45.05), "научный": (34.01, 44.72),
-    "нижнегорский": (34.73, 45.44), "никита": (34.23, 44.51), "николаевка": (33.61, 44.96),
-    "новая деревня": (33.88, 45.85), "новоандреевка": (34.01, 45.22), "новоивановка": (33.15, 45.44),
-    "новониколаевка": (35.83, 45.29), "новоозерное": (33.11, 45.38), "новопокровка": (35.24, 45.15),
-    "октябрьское": (34.12, 45.28), "оленевка": (32.53, 45.37), "орджоникидзе": (35.35, 44.96),
-    "орлиное": (33.77, 44.44), "останино": (35.91, 45.32), "островское": (34.01, 45.69),
-    "парковое": (33.91, 44.40), "партенит": (34.34, 44.57), "партизанское": (34.01, 44.82),
-    "первомайское": (33.85, 45.71), "перевальное": (34.32, 44.84), "перекопский залив": (33.60, 46.00),
-    "песчаное": (33.60, 44.84), "песчаный": (33.58, 44.83), "пионерское": (34.19, 44.88),
-    "победное": (34.43, 45.72), "почтовое": (33.93, 44.83), "приветное": (34.69, 44.82),
-    "привольное": (34.82, 45.18), "приморский": (35.47, 45.11), "пташкино": (36.19, 45.15),
-    "пушкино": (35.08, 45.17), "пятихатка": (34.27, 45.30), "равнополье": (33.72, 44.88),
-    "ровное": (34.34, 45.34), "ручьи": (33.60, 45.80), "рыбачье": (34.59, 44.77),
-    "садовое": (34.45, 45.36), "саки": (33.59, 45.13), "сары-баш": (33.68, 45.54),
-    "сарыч": (33.73, 44.38), "севастополь": (33.52, 44.61), "сиваш": (34.50, 45.90),
-    "симеиз": (34.00, 44.40), "симферополь": (34.10, 44.95), "славное": (33.15, 45.71),
-    "советский": (34.93, 45.34), "солнечная долина": (35.10, 44.87), "старый крым": (35.09, 45.02),
-    "стефановка": (34.78, 45.66), "столбовое": (33.45, 45.41), "судак": (34.97, 44.85),
-    "тарханкут": (32.49, 45.34), "трактовое": (34.11, 45.38), "тургеневка": (33.83, 44.69),
-    "угловое": (33.59, 44.81), "урет": (32.59, 45.31), "феодосия": (35.37, 45.03),
-    "феодосийский залив": (35.45, 45.05), "фиолент": (33.48, 44.49), "форос": (33.78, 44.39),
-    "фрунзе": (33.62, 45.02), "херсонес": (33.49, 44.61), "чауда": (35.83, 45.00),
-    "черноморское": (32.84, 45.50), "чернышево": (33.46, 45.78), "чистополье": (36.19, 45.36),
-    "широкое": (33.76, 44.49), "щебетовка": (35.15, 44.93), "щелкино": (35.81, 45.42),
-    "ялта": (34.16, 44.49)
-}
+BOT_TOKEN = "ТВОЙ_ТОКЕН_БОТА"
+WEBAPP_URL = "ССЫЛКА_НА_ТВОЙ_ХОСТИНГ_С_INDEX_HTML"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-found_points = set()
 
-def get_pixel_coords(lon, lat, width, height):
-    x = int((lon - MIN_LON) / (MAX_LON - MIN_LON) * width)
-    y = int(height - (lat - MIN_LAT) / (MAX_LAT - MIN_LAT) * height)
-    return x, y
-
-def draw_map():
-    if not os.path.exists("static_map.png"):
-        return
-    image = Image.open("static_map.png").convert("RGBA")
-    draw = ImageDraw.Draw(image)
-    w, h = image.size
-    
-    for lon, lat in found_points:
-        x, y = get_pixel_coords(lon, lat, w, h)
-        draw.ellipse((x - 12, y - 12, x + 12, y + 12), fill="red", outline="white", width=2)
-        draw.line((x, y, x + 35, y - 35), fill="red", width=5)
-        
-    image.convert("RGB").save("result_map.png")
-
-def get_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗺 Обновить карту", callback_data="refresh")],
-        [InlineKeyboardButton(text="🗑 Очистить", callback_data="clear")]
-    ])
-
-@dp.message()
-async def handle_any_message(message: Message):
-    if not message.text:
-        return
-    text = message.text.lower()
-    
-    if text in ["/start", "/map"]:
-        if not os.path.exists("static_map.png"):
-            await message.answer("Ошибка: нет файла static_map.png")
-            return
-
-        draw_map()
-        img = "result_map.png" if found_points else "static_map.png"
-        caption = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
-        
-        await message.answer_photo(FSInputFile(img), caption=caption, reply_markup=get_keyboard())
-        return
-
-    if "тревога по бпла" in text:
-        added = False
-        for kw, coords in GPS_MAP.items():
-            if kw in text:
-                found_points.add(coords)
-                added = True
-        if added:
-            await message.answer(f"Добавлено точек. Всего: {len(found_points)}")
-
-@dp.callback_query(F.data == "refresh")
-async def cb_refresh(callback: CallbackQuery):
-    draw_map()
-    img = "result_map.png" if found_points else "static_map.png"
-    caption = f"🔴 Активные тревоги: {len(found_points)}" if found_points else "🟢 Обстановка спокойная"
-    
-    try:
-        from aiogram.types import InputMediaPhoto
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=FSInputFile(img), caption=caption),
-            reply_markup=get_keyboard()
-        )
-    except Exception:
-        await callback.message.answer_photo(FSInputFile(img), caption=caption, reply_markup=get_keyboard())
-    
-    await callback.answer("Обновлено!")
-
-@dp.callback_query(F.data == "clear")
-async def cb_clear(callback: CallbackQuery):
-    found_points.clear()
-    draw_map()
-    
-    try:
-        from aiogram.types import InputMediaPhoto
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=FSInputFile("static_map.png"), caption="🟢 Обстановка спокойная"),
-            reply_markup=get_keyboard()
-        )
-    except Exception:
-        await callback.message.answer_photo(FSInputFile("static_map.png"), caption="🟢 Обстановка спокойная", reply_markup=get_keyboard())
-        
-    await callback.answer("Очищено!", show_alert=True)
+@dp.message(CommandStart())
+async def start(message: Message):
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="🗺 Открыть карту Крыма", 
+        web_app=WebAppInfo(url=WEBAPP_URL)
+    )
+    await message.answer(
+        "Нажми на кнопку ниже, чтобы открыть интерактивную карту:", 
+        reply_markup=builder.as_markup()
+    )
 
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-```
